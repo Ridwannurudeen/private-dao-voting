@@ -28,7 +28,7 @@ import {
 import { GetProgramAccountsFilter } from "@solana/web3.js";
 
 // Load the generated IDL at build time
-import generatedIdl from "../../target/idl/private_dao_voting.json";
+import generatedIdl from "../idl/private_dao_voting.json";
 
 // ==================== INLINE SVG ICONS ====================
 const LockIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
