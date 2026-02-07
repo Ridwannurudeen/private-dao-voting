@@ -1,0 +1,13 @@
+[package]
+name = "voting-circuit"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+arcis = { version = "0.1", features = ["mxe"] }
+
+[dev-dependencies]
+arcis = { version = "0.1", features = ["testing"] }

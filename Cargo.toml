@@ -1,0 +1,13 @@
+[workspace]
+members = [
+    "programs/private-dao-voting"
+]
+resolver = "2"
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+
+[patch.crates-io]
+getrandom = { git = "https://github.com/rust-random/getrandom", tag = "v0.2.12" }
