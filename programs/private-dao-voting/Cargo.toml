@@ -1,0 +1,23 @@
+[package]
+name = "private-dao-voting"
+version = "0.1.0"
+description = "Private DAO Voting with Arcium MXE"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "private_dao_voting"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+
+[dependencies]
+anchor-lang = "0.32.1"
+anchor-spl = "0.32.1"
+arcium-client = { version = "0.6.6", default-features = false }
+getrandom = { version = "=0.2.12", default-features = false, features = ["custom"] }
