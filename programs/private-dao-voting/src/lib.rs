@@ -184,10 +184,10 @@ pub mod private_dao_voting {
         voter_pubkey: [u8; 32],
     ) -> Result<()> {
         let proposal = &ctx.accounts.proposal;
-        
+
         // Validate voting is still active
         require!(proposal.is_active, VotingError::VotingClosed);
-        
+
         let clock = Clock::get()?;
         require!(
             clock.unix_timestamp < proposal.voting_ends_at,
@@ -286,7 +286,7 @@ pub mod private_dao_voting {
     /// Reveal the final vote results
     pub fn reveal_results(ctx: Context<RevealResults>) -> Result<()> {
         let proposal = &ctx.accounts.proposal;
-        
+
         // Only authority can reveal
         require!(
             ctx.accounts.authority.key() == proposal.authority,
@@ -378,10 +378,7 @@ pub mod private_dao_voting {
     }
 
     /// Initialize computation definitions (called once at deployment)
-    pub fn init_comp_def(
-        _ctx: Context<InitCompDef>,
-        _comp_def_data: Vec<u8>,
-    ) -> Result<()> {
+    pub fn init_comp_def(_ctx: Context<InitCompDef>, _comp_def_data: Vec<u8>) -> Result<()> {
         // This is handled by Arcium SDK during deployment
         // Included here for completeness
         Ok(())
