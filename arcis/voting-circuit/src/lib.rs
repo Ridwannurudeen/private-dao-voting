@@ -22,9 +22,7 @@ pub struct VotingState {
 
 /// Initialize a new voting session with encrypted zero counts
 #[arcis::export]
-pub fn initialize_voting(
-    computation_id: ComputationId,
-) -> VotingState {
+pub fn initialize_voting(computation_id: ComputationId) -> VotingState {
     let zero_u64: Enc<Shared, u64> = Enc::new(0u64);
 
     VotingState {
@@ -61,10 +59,7 @@ pub fn initialize_voting(
 ///   no_inc      = (vote == 0) as u64
 ///   abstain_inc = (vote == 2) as u64
 #[arcis::export]
-pub fn cast_vote(
-    state: VotingState,
-    encrypted_vote: Enc<Shared, u8>,
-) -> VotingState {
+pub fn cast_vote(state: VotingState, encrypted_vote: Enc<Shared, u8>) -> VotingState {
     // Encrypted comparisons — no values are revealed
     let one_u8: Enc<Shared, u8> = Enc::new(1u8);
     let zero_u8: Enc<Shared, u8> = Enc::new(0u8);
@@ -96,9 +91,7 @@ pub fn cast_vote(
 /// # Returns
 /// Tuple of (yes_votes, no_votes, abstain_votes, total_votes)
 #[arcis::export]
-pub fn finalize_and_reveal(
-    state: VotingState,
-) -> (u64, u64, u64, u64) {
+pub fn finalize_and_reveal(state: VotingState) -> (u64, u64, u64, u64) {
     let yes_votes = state.encrypted_yes_votes.reveal();
     let no_votes = state.encrypted_no_votes.reveal();
     let abstain_votes = state.encrypted_abstain_votes.reveal();

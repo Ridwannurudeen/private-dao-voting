@@ -1,298 +1,255 @@
-# Private DAO Voting on Arcium Network
+# Private DAO Voting
 
-A fully private voting system for DAOs built on Solana using the Arcium Network's encrypted computation capabilities. Individual votes are encrypted and hidden from everyone, but the final tally is publicly revealed when voting ends.
+[![CI](https://github.com/Ridwannurudeen/private-dao-voting/actions/workflows/ci.yml/badge.svg)](https://github.com/Ridwannurudeen/private-dao-voting/actions/workflows/ci.yml)
 
-## Architecture Overview
+**Confidential governance on Solana, powered by Arcium's Multi-Party Computation.**
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              VOTING FLOW                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌──────────┐    ┌───────────────┐    ┌──────────────┐    ┌──────────────┐ │
-│  │  Voter   │───▶│ Client SDK    │───▶│   Solana     │───▶│  Arcium MXE  │ │
-│  │          │    │ (Encryption)  │    │   Program    │    │  (Encrypted  │ │
-│  │ Vote: 1  │    │               │    │              │    │   Compute)   │ │
-│  └──────────┘    └───────────────┘    └──────────────┘    └──────────────┘ │
-│       │                  │                   │                    │        │
-│       │                  │                   │                    │        │
-│       ▼                  ▼                   ▼                    ▼        │
-│  ┌──────────┐    ┌───────────────┐    ┌──────────────┐    ┌──────────────┐ │
-│  │ Plaintext│───▶│ Encrypted     │───▶│   Queue IX   │───▶│   Process    │ │
-│  │ Vote     │    │ Vote Bytes    │    │   to MXE     │    │   in TEE     │ │
-│  │ (0 or 1) │    │ [encrypted]   │    │              │    │              │ │
-│  └──────────┘    └───────────────┘    └──────────────┘    └──────────────┘ │
-│                                                                    │        │
-│                                                                    │        │
-│                         CALLBACK (Results)                         ▼        │
-│  ┌──────────┐    ┌───────────────┐    ┌──────────────┐    ┌──────────────┐ │
-│  │  Public  │◀───│   On-Chain    │◀───│   Callback   │◀───│   Decrypt    │ │
-│  │  Result  │    │   Storage     │    │   Handler    │    │   Aggregate  │ │
-│  │          │    │              │    │              │    │   Only       │ │
-│  └──────────┘    └───────────────┘    └──────────────┘    └──────────────┘ │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+Votes are encrypted client-side, tallied inside Arcium's MXE without ever being decrypted, and only the final aggregate result is published on-chain — with correctness proofs. No one (not validators, not the DAO authority, not other voters) can see how any individual voted.
 
-## How the Shared Secret Works
+---
 
-### 1. Key Hierarchy
+## Why Private Voting Matters
+
+Public on-chain voting is broken:
+
+| Problem | Impact |
+|---------|--------|
+| **Vote buying** | Buyers can verify how you voted and pay/punish accordingly |
+| **Social coercion** | Whales and leaders influence others by voting first |
+| **Front-running** | MEV bots and last-minute voters game the outcome |
+| **Voter apathy** | People abstain rather than face backlash for unpopular positions |
+
+Private DAO Voting eliminates all four. Your vote is encrypted the moment you click — the tally happens inside Arcium's encrypted shared state, and only the final result is ever revealed.
+
+---
+
+## How Arcium Makes This Possible
+
+### The Privacy Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    ARCIUM MXE CLUSTER                           │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐       │
-│   │ Node 1  │   │ Node 2  │   │ Node 3  │   │ Node N  │       │
-│   │ (shard) │   │ (shard) │   │ (shard) │   │ (shard) │       │
-│   └────┬────┘   └────┬────┘   └────┬────┘   └────┬────┘       │
-│        │             │             │             │              │
-│        └─────────────┴──────┬──────┴─────────────┘              │
-│                             │                                    │
-│                    ┌────────▼────────┐                          │
-│                    │  Cluster Master │                          │
-│                    │  Key (Threshold)│                          │
-│                    └────────┬────────┘                          │
-│                             │                                    │
-│              ┌──────────────┼──────────────┐                    │
-│              │              │              │                    │
-│     ┌────────▼───────┐ ┌────▼────┐ ┌──────▼───────┐           │
-│     │ Computation 1  │ │ Comp 2  │ │ Computation N │           │
-│     │ (Proposal A)   │ │         │ │ (Proposal Z)  │           │
-│     │                │ │         │ │               │           │
-│     │ Derived Key    │ │  Key    │ │ Derived Key   │           │
-│     └────────────────┘ └─────────┘ └───────────────┘           │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+  Voter's Browser              Solana Program              Arcium MXE Cluster
+  ================             ==============              ==================
+
+  1. Choose YES/NO/ABSTAIN
+         │
+         ▼
+  2. Encrypt with x25519
+     + RescueCipher
+     (vote → ciphertext)
+         │
+         ▼
+  3. Submit encrypted    ────►  4. Verify token gate
+     vote on-chain              Check double-vote PDA
+                                Store ciphertext
+                                         │
+                                         ▼
+                                5. CPI to Arcium  ────►  6. MPC nodes receive
+                                   (queue computation)      encrypted vote shares
+                                                                    │
+                                                                    ▼
+                                                            7. Homomorphic tally
+                                                               (add encrypted
+                                                                values without
+                                                                decrypting them)
+                                                                    │
+                                         ┌──────────────────────────┘
+                                         ▼
+                                8. Callback with          9. Aggregate result
+                                   revealed tally  ◄────     decrypted ONLY as
+                                   (yes, no, abstain)        a final sum
+                                         │
+                                         ▼
+                                10. Public result
+                                    stored on Solana
+                                    (individual votes
+                                     remain secret forever)
 ```
 
-### 2. Client-Side Key Derivation
+### What Arcium's MXE Actually Does
 
-When a voter wants to cast a vote, the client:
+The **MXE (Multi-Party Computation eXecution Environment)** is a cluster of independent nodes (Arx Nodes) that collectively compute on encrypted data:
 
-```typescript
-// 1. Fetch computation parameters from on-chain
-const tallyAccount = await program.account.tallyAccount.fetch(tallyPda);
-const computationId = tallyAccount.computationId;
+1. **Secret Sharing** — Each encrypted vote is split into cryptographic shares distributed across nodes. No single node holds enough information to reconstruct any vote.
 
-// 2. Derive shared encryption context from MXE public parameters
-const encryptionContext = await sharedSecretManager.deriveContext({
-  computationId,              // Unique to this proposal
-  circuitName: "voting_circuit",
-  keyType: "Shared"           // Maps to Enc<Shared, T>
-});
+2. **Encrypted Computation** — The Arcis circuit (`cast_vote`) runs inside the MXE, performing arithmetic on `Enc<Shared, u64>` values. The addition `state.encrypted_yes_votes + is_yes` happens on ciphertext — the nodes never see plaintext.
 
-// 3. Encrypt the vote
-const encryptedVote = await arciumClient.encrypt({
-  data: new Uint8Array([vote]),  // 0 or 1
-  context: encryptionContext,
-  dataType: "u8"
-});
+3. **Threshold Decryption** — Only `finalize_and_reveal` triggers decryption, and only for the aggregate totals. Individual vote values are never reconstructed.
+
+4. **Correctness Proofs** — The MXE produces cryptographic proofs that the published result is the correct aggregation of all submitted votes, without revealing any individual vote.
+
+### The Arcis Circuit
+
+The core privacy logic lives in `arcis/voting-circuit/src/lib.rs`:
+
+```rust
+#[arcis::export]
+pub fn cast_vote(
+    state: VotingState,
+    encrypted_vote: Enc<Shared, u8>,  // 0=NO, 1=YES, 2=ABSTAIN
+) -> VotingState {
+    // Encrypted comparisons — no values are revealed
+    let is_yes: Enc<Shared, u64> = encrypted_vote.eq(&Enc::new(1u8)).cast();
+    let is_no: Enc<Shared, u64> = encrypted_vote.eq(&Enc::new(0u8)).cast();
+    let is_abstain: Enc<Shared, u64> = encrypted_vote.eq(&Enc::new(2u8)).cast();
+
+    VotingState {
+        encrypted_yes_votes: state.encrypted_yes_votes + is_yes,
+        encrypted_no_votes: state.encrypted_no_votes + is_no,
+        encrypted_abstain_votes: state.encrypted_abstain_votes + is_abstain,
+        encrypted_total_votes: state.encrypted_total_votes + Enc::new(1u64),
+    }
+}
 ```
 
-### 3. Why Individual Votes Stay Private
+Key design decisions:
+- **Constant-time comparisons** — `eq()` + `cast()` avoids branching on secret values (MPC cannot branch on encrypted data)
+- **No early reveal** — the circuit never calls `.reveal()` on individual votes or intermediate state
+- **Three-way vote** — YES/NO/ABSTAIN support via encrypted boolean flags, not arithmetic that could underflow
 
-| Property | Explanation |
-|----------|-------------|
-| **Same Key, Different Nonces** | All voters use the same shared key, but each encryption uses a unique random nonce |
-| **Encrypted Aggregation** | The MXE adds encrypted values without decrypting them |
-| **No Individual Decryption** | The key can only be used for aggregate operations, not individual value extraction |
-| **Callback-Only Reveal** | Results are only revealed through the official `finalize_and_reveal` callback |
+---
 
-## File Structure
+## Architecture
 
 ```
 private-dao-voting/
-├── src/
-│   └── encrypted-ixs/
-│       └── mod.rs              # Arcis encrypted instructions
-├── programs/
-│   └── private-dao-voting/
-│       └── src/
-│           └── lib.rs          # Anchor/Solana program
-├── app/
-│   └── src/
-│       └── client.ts           # TypeScript client SDK
-└── README.md
+├── arcis/voting-circuit/        # Arcis MPC circuit (Rust)
+│   └── src/lib.rs               #   VotingState, cast_vote, finalize_and_reveal
+├── programs/private-dao-voting/  # Anchor/Solana program (Rust)
+│   └── src/lib.rs               #   On-chain logic, token gating, PDA management
+├── frontend/                    # Next.js + Tailwind UI
+│   ├── pages/index.tsx          #   Main voting interface
+│   ├── lib/arcium.ts            #   Arcium client (encryption, MXE integration)
+│   ├── lib/contract.ts          #   Solana program helpers (PDAs, instructions)
+│   └── pages/api/faucet.ts      #   Dev token faucet
+└── scripts/                     # Devnet setup and testing
 ```
 
-## Component Details
-
-### 1. Encrypted Instructions (Arcis)
-
-Located in `src/encrypted-ixs/mod.rs`:
-
-```rust
-#[encrypted]
-pub mod voting_circuit {
-    #[state]
-    pub struct VotingState {
-        pub total_yes_votes: Enc<Shared, u64>,  // Overflow-safe
-        pub total_no_votes: Enc<Shared, u64>,
-        pub total_votes_cast: Enc<Shared, u64>,
-        pub is_active: Enc<Shared, u8>,
-    }
-
-    #[instruction]
-    pub fn cast_vote(state: &mut VotingState, vote: Enc<Shared, u8>) -> Enc<Shared, u8> {
-        // Encrypted vote added to encrypted tally
-        // No one can see individual votes!
-    }
-
-    #[instruction]
-    #[callback(program_id = "VotingDAO...")]
-    pub fn finalize_and_reveal(state: &VotingState) -> FinalTally {
-        // ONLY place where encrypted -> public transition happens
-        FinalTally {
-            yes_votes: state.total_yes_votes.from_arcis(),
-            no_votes: state.total_no_votes.from_arcis(),
-            total_votes: state.total_votes_cast.from_arcis(),
-        }
-    }
-}
-```
-
-### 2. Solana Program (Anchor)
-
-Located in `programs/private-dao-voting/src/lib.rs`:
-
-**Key Instructions:**
-- `initialize_proposal` - Create new voting proposal with PDA
-- `initialize_encrypted_state` - Setup encrypted state on MXE
-- `cast_vote` - Queue encrypted vote to MXE
-- `finalize_voting` - Trigger result revelation
-- `finalize_voting_callback` - **CRITICAL**: Only way to reveal results
-
-**Security Features:**
-- Voter records prevent double voting
-- Time-locked voting periods
-- Authority-only finalization
-- MXE-only callback validation
-
-### 3. TypeScript Client
-
-Located in `app/src/client.ts`:
-
-```typescript
-const client = new PrivateVotingClient({ connection, wallet });
-
-// Create proposal
-await client.createProposal(proposalId, title, description, duration);
-
-// Initialize encrypted state
-await client.initializeEncryptedState(proposalPda);
-
-// Cast encrypted vote
-await client.castVote(proposalPda, Vote.Yes);  // Vote is encrypted!
-
-// Finalize and get results
-await client.finalizeVoting(proposalPda);
-const results = await client.waitForResults(proposalPda);
-```
-
-## Overflow Protection
-
-The system uses `u64` for vote counting:
-
-```rust
-// Maximum votes supported: 18,446,744,073,709,551,615
-// That's 18 quintillion votes - more than enough!
-
-pub total_yes_votes: Enc<Shared, u64>,
-pub total_no_votes: Enc<Shared, u64>,
-pub total_votes_cast: Enc<Shared, u64>,
-```
-
-Even if the entire world voted multiple times, we wouldn't overflow.
-
-## State Transition Diagram
+### Component Interaction
 
 ```
-┌─────────────┐     initialize_proposal      ┌──────────────────┐
-│   (none)    │ ─────────────────────────▶  │ Proposal Created │
-└─────────────┘                              └────────┬─────────┘
-                                                      │
-                                                      │ initialize_encrypted_state
-                                                      ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     VOTING ACTIVE                                │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ Encrypted State (on Arcium MXE):                            ││
-│  │   - total_yes_votes: Enc<Shared, u64>  [hidden]            ││
-│  │   - total_no_votes: Enc<Shared, u64>   [hidden]            ││
-│  │   - total_votes_cast: Enc<Shared, u64> [hidden]            ││
-│  └─────────────────────────────────────────────────────────────┘│
-│                                                                  │
-│  cast_vote(encrypted_ballot) ──▶ Updates hidden tally           │
-│                                                                  │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │
-                               │ finalize_voting (after end_slot)
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    FINALIZATION PENDING                          │
-│  Waiting for MXE to process finalize_and_reveal...              │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │
-                               │ finalize_voting_callback (MXE only!)
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      RESULTS REVEALED                            │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ Public State (on Solana):                                   ││
-│  │   - final_yes_votes: 1,234  [PUBLIC]                       ││
-│  │   - final_no_votes: 567     [PUBLIC]                       ││
-│  │   - final_total_votes: 1,801 [PUBLIC]                      ││
-│  │   - is_revealed: true                                       ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  Frontend (Next.js)                                                 │
+│  ┌──────────────┐  ┌───────────────────┐  ┌──────────────────────┐ │
+│  │ Wallet       │  │ ArciumClient      │  │ Contract helpers     │ │
+│  │ (Phantom,    │  │ • x25519 keygen   │  │ • PDA derivation     │ │
+│  │  Solflare)   │  │ • RescueCipher    │  │ • Token gate check   │ │
+│  │              │  │ • Vote encryption │  │ • Instruction build  │ │
+│  └──────┬───────┘  └────────┬──────────┘  └──────────┬───────────┘ │
+│         │                   │                        │             │
+└─────────┼───────────────────┼────────────────────────┼─────────────┘
+          │                   │                        │
+          ▼                   ▼                        ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  Solana Program (Anchor 0.32.1)                                     │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │ create_proposal → init_tally → cast_vote ──CPI──► Arcium MXE │ │
+│  │                                                        │      │ │
+│  │ reveal_results_callback ◄──────────────────────────────┘      │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+│  Security: token gating, VoteRecord PDA (no double-vote),          │
+│            sign PDA signer on callbacks, time-locked periods       │
+└─────────────────────────────────────────────────────────────────────┘
+          │                                                    │
+          ▼                                                    ▼
+┌──────────────────────┐                    ┌──────────────────────────┐
+│  Solana Devnet        │                    │  Arcium MXE Cluster       │
+│  • Proposal accounts  │                    │  • Arx Nodes (MPC)        │
+│  • Tally accounts     │                    │  • Encrypted shared state │
+│  • VoteRecord PDAs    │                    │  • Computation offsets    │
+│  • SPL token gates    │                    │  • Correctness proofs     │
+└──────────────────────┘                    └──────────────────────────┘
 ```
 
-## Security Considerations
+---
 
-1. **Vote Privacy**: Individual votes never leave the client unencrypted
-2. **No Replay Attacks**: VoterRecord PDA prevents double voting
-3. **Time-Locked**: Votes can only be cast during the voting period
-4. **Authorized Finalization**: Only proposal authority can trigger reveal
-5. **Trusted Callback**: Only Arcium MXE can call the callback
+## Security Model
 
-## Building & Deployment
+| Layer | Mechanism | What it prevents |
+|-------|-----------|-----------------|
+| **Vote privacy** | x25519 ECDH + RescueCipher encryption | Anyone reading vote content |
+| **Double voting** | `VoteRecord` PDA per (proposal, voter) | Same wallet voting twice |
+| **Token gating** | SPL token balance check before vote | Non-stakeholders influencing outcomes |
+| **Callback auth** | Sign PDA signer constraint on callbacks | Unauthorized result injection |
+| **Time lock** | `voting_ends_at` timestamp enforcement | Votes after deadline |
+| **MPC integrity** | Arcium threshold cryptography | Any single node learning vote values |
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- [Rust](https://rustup.rs/) + [Solana CLI](https://docs.solanalabs.com/cli/install) (v1.18+)
+- [Anchor](https://www.anchor-lang.com/docs/installation) v0.32.1
+- [Node.js](https://nodejs.org/) v18+
+- A Solana wallet (Phantom, Solflare, etc.)
+
+### Build & Deploy
 
 ```bash
-# Build Arcis encrypted instructions
-arcis build
+# Clone the repository
+git clone https://github.com/Ridwannurudeen/private-dao-voting.git
+cd private-dao-voting
 
-# Build Anchor program
+# Build the Anchor program
 anchor build
 
-# Deploy to devnet
+# Deploy to Solana devnet
+solana config set --url devnet
 anchor deploy --provider.cluster devnet
 
-# Run tests
-anchor test
+# Setup gate tokens for testing
+npx ts-node scripts/setup-devnet.ts
 ```
 
-## Dependencies
+### Run the Frontend
 
-**Rust (Arcis & Anchor):**
-```toml
-[dependencies]
-anchor-lang = "0.29.0"
-arcis = "0.1.0"
-arcium-anchor = "0.1.0"
+```bash
+cd frontend
+npm install
+npm run dev
+# Open http://localhost:3000
 ```
 
-**TypeScript:**
-```json
-{
-  "dependencies": {
-    "@solana/web3.js": "^1.87.0",
-    "@coral-xyz/anchor": "^0.29.0",
-    "@arcium/sdk": "^0.1.0"
-  }
-}
+### Run Tests
+
+```bash
+# Unit tests (mock Arcium)
+npm run test:unit
+
+# E2E tests (requires devnet)
+npm run test:e2e
 ```
+
+---
+
+## Development Mode
+
+The app includes a **dev mode** that runs when `NEXT_PUBLIC_MXE_PROGRAM_ID` is not set. In dev mode:
+
+- Votes are encrypted locally using the same x25519 + RescueCipher pipeline
+- The `dev_cast_vote` instruction bypasses Arcium CPI but still enforces token gating and double-vote prevention
+- Vote tallies are tracked client-side and submitted via `dev_reveal_results`
+- All security checks (token balance, time locks, PDA constraints) remain active
+
+This allows full end-to-end testing without a live MXE cluster. Set `NEXT_PUBLIC_MXE_PROGRAM_ID` to your deployed MXE program ID for production mode.
+
+---
+
+## Tech Stack
+
+| Component | Technology | Version |
+|-----------|-----------|---------|
+| Smart contract | Anchor (Solana) | 0.32.1 |
+| MPC circuit | Arcis (Arcium) | 0.1.0 |
+| Arcium client | @arcium-hq/client | 0.7.0 |
+| Frontend | Next.js + React | 14.0.4 |
+| Styling | Tailwind CSS | 3.4.0 |
+| Wallet | Solana Wallet Adapter | latest |
+| Token standard | SPL Token | 0.4.x |
+
+---
 
 ## License
 
