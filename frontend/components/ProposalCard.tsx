@@ -17,6 +17,7 @@ export interface Proposal {
   yesVotes: number;
   noVotes: number;
   abstainVotes: number;
+  quorum: number;
 }
 
 function formatTime(secondsRemaining: number): string {
@@ -115,6 +116,7 @@ export function ProposalCard({
       <p className="text-gray-300 mb-4 line-clamp-3">{p.description}</p>
       <p className="text-xs text-gray-400 mb-4">
         Gate: {p.gateMint.toString().slice(0, 8)}... | Min balance: {p.minBalance.toString()} | Votes: {total}
+        {p.quorum > 0 && (<> | Quorum: {total}/{p.quorum} {total >= p.quorum ? <span className="text-green-400">met</span> : <span className="text-yellow-400">not met</span>}</>)}
       </p>
 
       {/* Token gate check */}

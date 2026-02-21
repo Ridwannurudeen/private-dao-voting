@@ -4,6 +4,8 @@
 
 **Confidential governance on Solana, powered by Arcium's Multi-Party Computation.**
 
+**[Live Demo](https://privatedao-arcium.vercel.app/)** | [GitHub](https://github.com/Ridwannurudeen/private-dao-voting)
+
 Votes are encrypted client-side, tallied inside Arcium's MXE without ever being decrypted, and only the final aggregate result is published on-chain — with correctness proofs. No one (not validators, not the DAO authority, not other voters) can see how any individual voted.
 
 ---
@@ -113,16 +115,24 @@ Key design decisions:
 
 ```
 private-dao-voting/
-├── arcis/voting-circuit/        # Arcis MPC circuit (Rust)
-│   └── src/lib.rs               #   VotingState, cast_vote, finalize_and_reveal
-├── programs/private-dao-voting/  # Anchor/Solana program (Rust)
-│   └── src/lib.rs               #   On-chain logic, token gating, PDA management
-├── frontend/                    # Next.js + Tailwind UI
-│   ├── pages/index.tsx          #   Main voting interface
-│   ├── lib/arcium.ts            #   Arcium client (encryption, MXE integration)
-│   ├── lib/contract.ts          #   Solana program helpers (PDAs, instructions)
-│   └── pages/api/faucet.ts      #   Dev token faucet
-└── scripts/                     # Devnet setup and testing
+├── arcis/voting-circuit/          # Arcis MPC circuit (Rust)
+│   └── src/lib.rs                 #   VotingState, cast_vote, finalize_and_reveal
+├── programs/private-dao-voting/   # Anchor/Solana program (Rust)
+│   └── src/lib.rs                 #   On-chain logic, token gating, delegation, quorum
+├── frontend/                      # Next.js + Tailwind UI
+│   ├── pages/index.tsx            #   Main voting interface
+│   ├── components/
+│   │   ├── ProposalCard.tsx       #   Proposal display, voting UI, quorum status
+│   │   ├── CreateModal.tsx        #   Proposal creation form
+│   │   ├── PrivacyProtocol.tsx    #   Privacy tech explainer
+│   │   ├── ErrorBoundary.tsx      #   Crash recovery wrapper
+│   │   ├── Modal.tsx              #   Reusable modal
+│   │   ├── Toast.tsx              #   Notification system
+│   │   └── Icons.tsx              #   SVG icon components
+│   ├── lib/arcium.ts              #   Arcium client (encryption, MXE integration)
+│   ├── lib/contract.ts            #   Solana program helpers (PDAs, delegation)
+│   └── pages/api/faucet.ts        #   Dev token faucet
+└── scripts/                       # Devnet setup and testing
 ```
 
 ### Component Interaction
@@ -170,6 +180,8 @@ private-dao-voting/
 | **Vote privacy** | x25519 ECDH + RescueCipher encryption | Anyone reading vote content |
 | **Double voting** | `VoteRecord` PDA per (proposal, voter) | Same wallet voting twice |
 | **Token gating** | SPL token balance check before vote | Non-stakeholders influencing outcomes |
+| **Quorum enforcement** | Minimum vote threshold on reveal | Decisions with insufficient participation |
+| **Vote delegation** | On-chain delegation PDA with revocation | Governance without active participation |
 | **Callback auth** | Sign PDA signer constraint on callbacks | Unauthorized result injection |
 | **Time lock** | `voting_ends_at` timestamp enforcement | Votes after deadline |
 | **MPC integrity** | Arcium threshold cryptography | Any single node learning vote values |
@@ -234,6 +246,18 @@ The app includes a **dev mode** that runs when `NEXT_PUBLIC_MXE_PROGRAM_ID` is n
 - All security checks (token balance, time locks, PDA constraints) remain active
 
 This allows full end-to-end testing without a live MXE cluster. Set `NEXT_PUBLIC_MXE_PROGRAM_ID` to your deployed MXE program ID for production mode.
+
+---
+
+## Governance Features
+
+### Quorum Threshold
+
+Proposal creators can set a minimum number of votes required before results can be revealed. If the quorum is not met when the authority attempts to reveal, the transaction fails. This prevents decisions from being made with insufficient community participation.
+
+### Vote Delegation
+
+Token holders can delegate their voting power to a trusted representative via an on-chain `Delegation` PDA. Delegations can be revoked at any time. This enables passive governance participation — holders who trust a community member can delegate without giving up their tokens.
 
 ---
 

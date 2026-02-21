@@ -16,6 +16,9 @@ import {
   devCastVote,
   castVoteWithArcium,
   devRevealResults,
+  delegateVote,
+  revokeDelegation,
+  getDelegation,
 } from "../lib/contract";
 import {
   ArciumClient,
@@ -56,6 +59,9 @@ export default function Home() {
   const [isEncrypting, setIsEncrypting] = useState(false);
   const [tokenBalances, setTokenBalances] = useState<Record<string, number>>({});
   const [claiming, setClaiming] = useState<Record<string, boolean>>({});
+  const [delegation, setDelegation] = useState<{ delegate: PublicKey; createdAt: number } | null>(null);
+  const [delegateInput, setDelegateInput] = useState("");
+  const [delegating, setDelegating] = useState(false);
 
   // Dev mode: track local vote tallies since MXE isn't aggregating
   const [devTallies, setDevTallies] = useState<Record<string, { yes: number; no: number; abstain: number }>>(() => {
@@ -166,6 +172,7 @@ export default function Home() {
             yesVotes: a.yesVotes ?? a.yes_votes ?? 0,
             noVotes: a.noVotes ?? a.no_votes ?? 0,
             abstainVotes: a.abstainVotes ?? a.abstain_votes ?? 0,
+            quorum: a.quorum ?? 0,
           });
         } catch {
           console.warn("Skipping undeserializable proposal account:", raw.pubkey.toBase58());
@@ -220,15 +227,54 @@ export default function Home() {
     if (connected && anchorWallet) load();
   }, [connected, anchorWallet, load]);
 
+  // Check delegation status
+  useEffect(() => {
+    if (!publicKey || !connected) { setDelegation(null); return; }
+    const program = getProgram();
+    if (!program) return;
+    getDelegation(program, publicKey).then(setDelegation);
+  }, [publicKey, connected, getProgram]);
+
+  const handleDelegate = async () => {
+    const program = getProgram();
+    if (!program || !publicKey || !delegateInput.trim()) return;
+    setDelegating(true);
+    try {
+      const delegate = new PublicKey(delegateInput.trim());
+      await delegateVote(program, publicKey, delegate);
+      setDelegation({ delegate, createdAt: Math.floor(Date.now() / 1000) });
+      setDelegateInput("");
+      setToast({ message: "Vote delegation active!", type: "success" });
+    } catch (e: any) {
+      setToast({ message: e.message || "Delegation failed", type: "error" });
+    }
+    setDelegating(false);
+  };
+
+  const handleRevoke = async () => {
+    const program = getProgram();
+    if (!program || !publicKey) return;
+    setDelegating(true);
+    try {
+      await revokeDelegation(program, publicKey);
+      setDelegation(null);
+      setToast({ message: "Delegation revoked", type: "success" });
+    } catch (e: any) {
+      setToast({ message: e.message || "Revoke failed", type: "error" });
+    }
+    setDelegating(false);
+  };
+
   // Create proposal
-  const create = async (title: string, desc: string, duration: number, gateMintStr: string, minBalanceStr: string) => {
+  const create = async (title: string, desc: string, duration: number, gateMintStr: string, minBalanceStr: string, quorumStr: string) => {
     const program = getProgram();
     if (!program || !publicKey) return;
     setCreating(true);
     try {
       const gateMint = new PublicKey(gateMintStr);
       const minBalance = new BN(minBalanceStr);
-      const { proposalPDA } = await devCreateProposal(program, publicKey, title, desc, duration, gateMint, minBalance);
+      const quorum = new BN(quorumStr || "0");
+      const { proposalPDA } = await devCreateProposal(program, publicKey, title, desc, duration, gateMint, minBalance, quorum);
       await devInitTally(program, publicKey, proposalPDA);
       setToast({ message: "Proposal created with tally initialized!", type: "success" });
       setModal(false);
@@ -398,6 +444,36 @@ export default function Home() {
                 <button onClick={load} className="px-4 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-sm transition-all border border-white/5 hover:border-white/20">Refresh</button>
                 <button onClick={() => setModal(true)} className="px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-500 rounded-xl font-semibold hover:shadow-lg hover:shadow-cyan-500/20 transition-all">New Proposal</button>
               </div>
+            </div>
+
+            {/* Delegation Panel */}
+            <div className="glass-card neon-border p-4">
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">Vote Delegation</h3>
+              {delegation ? (
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-400">
+                    Delegated to <span className="text-cyan-400">{delegation.delegate.toString().slice(0, 8)}...{delegation.delegate.toString().slice(-4)}</span>
+                  </p>
+                  <button onClick={handleRevoke} disabled={delegating}
+                    className="px-3 py-1.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg text-xs hover:bg-red-500/20 transition-all disabled:opacity-50">
+                    {delegating ? "..." : "Revoke"}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    value={delegateInput}
+                    onChange={(e) => setDelegateInput(e.target.value)}
+                    placeholder="Delegate address (wallet pubkey)"
+                    className="flex-1 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+                  />
+                  <button onClick={handleDelegate} disabled={delegating || !delegateInput.trim()}
+                    className="px-4 py-1.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg text-xs hover:bg-cyan-500/20 transition-all disabled:opacity-50">
+                    {delegating ? "..." : "Delegate"}
+                  </button>
+                </div>
+              )}
+              <p className="text-[10px] text-gray-500 mt-1">Delegate your voting power to a trusted address. You cannot vote directly while delegation is active.</p>
             </div>
 
             {loading && <div className="text-center py-12 text-gray-400">Loading proposals...</div>}

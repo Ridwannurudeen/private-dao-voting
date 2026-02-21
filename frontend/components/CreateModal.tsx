@@ -8,7 +8,7 @@ import { ShieldCheckIcon } from "./Icons";
 interface CreateModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (title: string, desc: string, duration: number, gateMint: string, minBalance: string) => void;
+  onSubmit: (title: string, desc: string, duration: number, gateMint: string, minBalance: string, quorum: string) => void;
   loading: boolean;
 }
 
@@ -18,11 +18,12 @@ export function CreateModal({ isOpen, onClose, onSubmit, loading }: CreateModalP
   const [duration, setDuration] = useState(86400);
   const [gateMint, setGateMint] = useState(DEFAULT_GATE_MINT.toString());
   const [minBalance, setMinBalance] = useState("1");
+  const [quorum, setQuorum] = useState("0");
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (title.trim() && desc.trim() && gateMint.trim() && minBalance.trim()) {
-      onSubmit(title, desc, duration, gateMint.trim(), minBalance.trim());
+      onSubmit(title, desc, duration, gateMint.trim(), minBalance.trim(), quorum.trim() || "0");
     }
   };
 
@@ -81,6 +82,14 @@ export function CreateModal({ isOpen, onClose, onSubmit, loading }: CreateModalP
           <label className="block text-sm text-gray-400 mb-1">Minimum Token Balance</label>
           <input value={minBalance} onChange={(e) => setMinBalance(e.target.value)}
             placeholder="1"
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/30 transition-all"
+            disabled={loading}
+          />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">Quorum (minimum votes required, 0 = none)</label>
+          <input value={quorum} onChange={(e) => setQuorum(e.target.value)}
+            placeholder="0"
             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/30 transition-all"
             disabled={loading}
           />
