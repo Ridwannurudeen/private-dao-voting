@@ -248,6 +248,11 @@ export default function Home() {
   const [tokenBalances, setTokenBalances] = useState<Record<string, number>>({});
   const [claiming, setClaiming] = useState<Record<string, boolean>>({});
   const [showTechDeep, setShowTechDeep] = useState(false);
+  // Dev mode: track local vote tallies since MXE isn't aggregating
+  const [devTallies, setDevTallies] = useState<Record<string, { yes: number; no: number; abstain: number }>>(() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(localStorage.getItem("devTallies") || "{}"); } catch { return {}; }
+  });
   const [hiddenProposals, setHiddenProposals] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
     try { return new Set(JSON.parse(localStorage.getItem("hiddenProposals") || "[]")); } catch { return new Set(); }
@@ -489,6 +494,23 @@ export default function Home() {
         );
       }
 
+      // In dev mode, track the vote choice locally for reveal
+      if (DEVELOPMENT_MODE) {
+        setDevTallies((prev) => {
+          const current = prev[key] || { yes: 0, no: 0, abstain: 0 };
+          const updated = {
+            ...prev,
+            [key]: {
+              yes: current.yes + (choice === "yes" ? 1 : 0),
+              no: current.no + (choice === "no" ? 1 : 0),
+              abstain: current.abstain + (choice === "abstain" ? 1 : 0),
+            },
+          };
+          localStorage.setItem("devTallies", JSON.stringify(updated));
+          return updated;
+        });
+      }
+
       setToast({ message: "Encrypted vote recorded on-chain!", type: "success" });
       setVoted((v) => ({ ...v, [key]: true }));
       setSelected((s) => ({ ...s, [key]: null }));
@@ -510,15 +532,16 @@ export default function Home() {
     setRevealing((r) => ({ ...r, [key]: true }));
 
     try {
-      // In dev mode, the authority provides the counts manually.
-      // In a real scenario, MXE would compute these from encrypted votes.
+      // In dev mode, use locally tracked tallies.
+      // In production, MXE computes these from encrypted votes.
+      const tally = devTallies[key] || { yes: 0, no: 0, abstain: 0 };
       await devRevealResults(
         program,
         publicKey,
         proposal.publicKey,
-        proposal.totalVotes, // For dev mode: assume all votes are YES
-        0,
-        0
+        tally.yes,
+        tally.no,
+        tally.abstain
       );
 
       setToast({ message: "Results revealed!", type: "success" });
