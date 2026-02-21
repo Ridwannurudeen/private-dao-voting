@@ -17,11 +17,8 @@
     "types": ["mocha", "node"]
   },
   "include": [
-    "app/**/*.ts",
     "tests/**/*.ts",
-    "scripts/**/*.ts",
-    "*.test.ts",
-    "arcium-mock.ts"
+    "scripts/**/*.ts"
   ],
   "exclude": [
     "node_modules",

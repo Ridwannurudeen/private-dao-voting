@@ -34,6 +34,9 @@ import { Toast, ToastData } from "../components/Toast";
 import { CreateModal } from "../components/CreateModal";
 import { PrivacyProtocol } from "../components/PrivacyProtocol";
 import { ProposalCard, Proposal } from "../components/ProposalCard";
+import { SkeletonCard } from "../components/SkeletonCard";
+import { StatsBar } from "../components/StatsBar";
+import { ActivityFeed } from "../components/ActivityFeed";
 
 import generatedIdl from "../idl/private_dao_voting.json";
 
@@ -377,17 +380,17 @@ export default function Home() {
     <div className="min-h-screen">
       {/* Header */}
       <header className="border-b border-white/10 sticky top-0 bg-slate-900/90 backdrop-blur-xl z-40">
-        <div className="max-w-5xl mx-auto flex justify-between items-center p-4">
-          <div className="flex items-center gap-3">
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">Private DAO Voting</h1>
+        <div className="max-w-5xl mx-auto flex justify-between items-center p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent truncate">Private DAO Voting</h1>
               <p className="text-[10px] text-gray-500 tracking-widest uppercase">Powered by Arcium</p>
             </div>
-            <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full">Devnet</span>
+            <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full shrink-0 hidden sm:inline">Devnet</span>
             {DEVELOPMENT_MODE ? (
-              <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full">Dev Mode (Local Encryption)</span>
+              <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full shrink-0 hidden md:inline">Dev Mode</span>
             ) : (
-              <span className={`text-xs px-2 py-1 rounded-full ${arciumClient ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
+              <span className={`text-xs px-2 py-1 rounded-full shrink-0 hidden md:inline ${arciumClient ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
                 {arciumClient ? "MXE Connected" : "MXE Disconnected"}
               </span>
             )}
@@ -427,11 +430,11 @@ export default function Home() {
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
-                <h2 className="text-2xl font-bold">Proposals</h2>
+                <h2 className="text-xl sm:text-2xl font-bold">Proposals</h2>
                 <div className="flex items-center gap-2">
-                  <p className="text-sm text-gray-400">{new Date(nowTs * 1000).toLocaleString()}</p>
+                  <p className="text-xs sm:text-sm text-gray-400">{new Date(nowTs * 1000).toLocaleString()}</p>
                   {hiddenProposals.size > 0 && (
                     <button onClick={() => { setHiddenProposals(new Set()); localStorage.removeItem("hiddenProposals"); }}
                       className="text-xs text-gray-500 hover:text-cyan-400 transition-colors">
@@ -440,9 +443,9 @@ export default function Home() {
                   )}
                 </div>
               </div>
-              <div className="flex gap-3">
-                <button onClick={load} className="px-4 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-sm transition-all border border-white/5 hover:border-white/20">Refresh</button>
-                <button onClick={() => setModal(true)} className="px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-500 rounded-xl font-semibold hover:shadow-lg hover:shadow-cyan-500/20 transition-all">New Proposal</button>
+              <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
+                <button onClick={load} className="flex-1 sm:flex-none px-4 py-2.5 sm:py-3 bg-white/10 hover:bg-white/20 rounded-xl text-sm transition-all border border-white/5 hover:border-white/20">Refresh</button>
+                <button onClick={() => setModal(true)} className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-cyan-500 rounded-xl font-semibold hover:shadow-lg hover:shadow-cyan-500/20 transition-all">New Proposal</button>
               </div>
             </div>
 
@@ -476,7 +479,18 @@ export default function Home() {
               <p className="text-[10px] text-gray-500 mt-1">Delegate your voting power to a trusted address. You cannot vote directly while delegation is active.</p>
             </div>
 
-            {loading && <div className="text-center py-12 text-gray-400">Loading proposals...</div>}
+            {/* Stats Dashboard */}
+            {!loading && proposals.length > 0 && (
+              <StatsBar proposals={proposals} nowTs={nowTs} />
+            )}
+
+            {loading && (
+              <div className="space-y-4">
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </div>
+            )}
 
             {!loading && proposals.length === 0 && (
               <div className="text-center py-16 glass-card neon-border p-8">
@@ -511,6 +525,11 @@ export default function Home() {
                 />
               );
             })}
+
+            {/* Activity Feed */}
+            {!loading && proposals.length > 0 && (
+              <ActivityFeed connection={connection} />
+            )}
           </div>
         )}
       </main>

@@ -10,6 +10,25 @@ Votes are encrypted client-side, tallied inside Arcium's MXE without ever being 
 
 ---
 
+## Demo
+
+| Create Proposal | Cast Encrypted Vote | Revealed Results |
+|:---:|:---:|:---:|
+| Token-gated proposals with quorum thresholds and vote delegation | Votes encrypted client-side via x25519 + RescueCipher before submission | Aggregate results with correctness proofs, exportable as CSV/JSON |
+
+> **Try it live:** [privatedao-arcium.vercel.app](https://privatedao-arcium.vercel.app/) — Connect a Solana devnet wallet to create proposals and cast encrypted votes.
+
+**Key UI features:**
+- Real-time countdown timers with urgency indicators
+- Shimmer-animated encrypted vote vault showing sealed votes
+- Privacy integrity progress bar during vote encryption
+- Live activity feed showing on-chain events
+- Participation stats dashboard
+- Shareable proposal links (`/proposal/[id]`)
+- Mobile-responsive design
+
+---
+
 ## Why Private Voting Matters
 
 Public on-chain voting is broken:
@@ -227,12 +246,23 @@ npm run dev
 ### Run Tests
 
 ```bash
-# Unit tests (mock Arcium)
-npm run test:unit
+# Anchor integration tests (requires local validator or devnet)
+# Tests: proposal lifecycle, voting, quorum enforcement,
+# delegation, token gating, double-vote prevention, access control
+anchor test
 
-# E2E tests (requires devnet)
-npm run test:e2e
+# Or run against devnet directly
+anchor test --skip-local-validator
 ```
+
+**Test coverage includes:**
+- Proposal creation and tally initialization
+- Encrypted vote casting with token gating
+- Double-vote prevention (PDA uniqueness)
+- Quorum enforcement (reject reveal when not met)
+- Authority-only reveal with result verification
+- Vote delegation and revocation
+- Non-authority access control
 
 ---
 

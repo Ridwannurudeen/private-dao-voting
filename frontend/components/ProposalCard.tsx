@@ -1,6 +1,8 @@
+import { useState, useEffect } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 import { LockIcon, UnlockIcon, ShieldCheckIcon } from "./Icons";
+import { ExportResults } from "./ExportResults";
 
 export interface Proposal {
   publicKey: PublicKey;
@@ -24,10 +26,11 @@ function formatTime(secondsRemaining: number): string {
   if (secondsRemaining <= 0) return "Ended";
   const hours = Math.floor(secondsRemaining / 3600);
   const minutes = Math.floor((secondsRemaining % 3600) / 60);
+  const seconds = Math.floor(secondsRemaining % 60);
   if (hours > 24) return Math.floor(hours / 24) + "d " + (hours % 24) + "h";
-  if (hours > 0) return hours + "h " + minutes + "m";
-  if (minutes > 0) return minutes + "m";
-  return Math.floor(secondsRemaining) + "s";
+  if (hours > 0) return hours + "h " + minutes + "m " + seconds + "s";
+  if (minutes > 0) return minutes + "m " + seconds + "s";
+  return seconds + "s";
 }
 
 interface ProposalCardProps {
@@ -65,10 +68,22 @@ export function ProposalCard({
   onClaimTokens,
   onToggleHide,
 }: ProposalCardProps) {
-  const active = p.isActive && nowTs < p.votingEndsAt.toNumber();
+  // Real-time countdown
+  const [liveRemaining, setLiveRemaining] = useState(p.votingEndsAt.toNumber() - nowTs);
+
+  useEffect(() => {
+    const endTime = p.votingEndsAt.toNumber();
+    const update = () => setLiveRemaining(endTime - Math.floor(Date.now() / 1000));
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [p.votingEndsAt]);
+
+  const active = p.isActive && liveRemaining > 0;
   const isAuthority = publicKey && p.authority.equals(publicKey);
-  const isEnded = nowTs >= p.votingEndsAt.toNumber();
+  const isEnded = liveRemaining <= 0;
   const canReveal = isAuthority && isEnded && !p.isRevealed && p.isActive;
+  const isUrgent = active && liveRemaining < 300; // < 5 minutes
 
   const yes = typeof p.yesVotes === "number" ? p.yesVotes : 0;
   const no = typeof p.noVotes === "number" ? p.noVotes : 0;
@@ -77,10 +92,14 @@ export function ProposalCard({
   const yesPct = total > 0 ? Math.round((yes / total) * 100) : 0;
   const noPct = total > 0 ? Math.round((no / total) * 100) : 0;
   const abstainPct = total > 0 ? Math.round((abstain / total) * 100) : 0;
-  const remaining = p.votingEndsAt.toNumber() - nowTs;
+
+  const copyLink = () => {
+    const url = `${window.location.origin}/proposal/${p.id.toString()}`;
+    navigator.clipboard.writeText(url);
+  };
 
   return (
-    <div className="glass-card neon-border p-6 relative group">
+    <div className="glass-card neon-border p-4 sm:p-6 relative group">
       {isAuthority && (
         <button onClick={onToggleHide} title="Hide proposal"
           className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all p-1">
@@ -93,12 +112,21 @@ export function ProposalCard({
       )}
 
       {/* Header */}
-      <div className="flex justify-between items-start mb-3">
-        <div>
-          <h3 className="text-lg font-semibold">{p.title}</h3>
+      <div className="flex flex-col sm:flex-row justify-between items-start mb-3 gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold truncate">{p.title}</h3>
+            <button onClick={copyLink} title="Copy shareable link"
+              className="shrink-0 text-gray-500 hover:text-cyan-400 transition-colors">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+            </button>
+          </div>
           <p className="text-sm text-gray-400">by {p.authority.toString().slice(0, 4)}...{p.authority.toString().slice(-4)}</p>
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex flex-row sm:flex-col items-start sm:items-end gap-2 flex-wrap">
           <span className={`px-3 py-1 rounded-full text-xs font-medium ${active ? "bg-green-500/20 text-green-400" : p.isRevealed ? "bg-blue-500/20 text-blue-400" : "bg-gray-500/20 text-gray-400"}`}>
             {active ? "Active" : p.isRevealed ? "Revealed" : "Ended"}
           </span>
@@ -109,12 +137,16 @@ export function ProposalCard({
               <><LockIcon className="w-3 h-3" /> Encrypted Tally</>
             )}
           </span>
-          {active && <p className="text-xs text-cyan-400 mt-0.5">{formatTime(remaining)} left</p>}
+          {active && (
+            <p className={`text-xs mt-0.5 font-mono ${isUrgent ? "text-red-400 animate-pulse" : "text-cyan-400"}`}>
+              {formatTime(liveRemaining)} left
+            </p>
+          )}
         </div>
       </div>
 
       <p className="text-gray-300 mb-4 line-clamp-3">{p.description}</p>
-      <p className="text-xs text-gray-400 mb-4">
+      <p className="text-xs text-gray-400 mb-4 break-all sm:break-normal">
         Gate: {p.gateMint.toString().slice(0, 8)}... | Min balance: {p.minBalance.toString()} | Votes: {total}
         {p.quorum > 0 && (<> | Quorum: {total}/{p.quorum} {total >= p.quorum ? <span className="text-green-400">met</span> : <span className="text-yellow-400">not met</span>}</>)}
       </p>
@@ -133,7 +165,7 @@ export function ProposalCard({
       {/* Voting buttons */}
       {active && !hasVoted && tokenBalance >= p.minBalance.toNumber() && (
         <div className="space-y-3">
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <button onClick={() => onSelectChoice("yes")} disabled={isVoting}
               className={`flex-1 py-3 rounded-xl font-semibold transition-all ${selectedChoice === "yes" ? "bg-emerald-500/20 text-emerald-400 border-2 border-emerald-500 shadow-lg shadow-emerald-500/25" : "bg-white/5 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10"}`}>
               YES
@@ -178,7 +210,7 @@ export function ProposalCard({
       {active && hasVoted && (
         <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-4 flex items-center justify-center gap-2">
           <ShieldCheckIcon className="w-5 h-5 text-cyan-400" />
-          <span className="text-cyan-400">Your encrypted vote is sealed on-chain</span>
+          <span className="text-cyan-400 text-sm sm:text-base">Your encrypted vote is sealed on-chain</span>
         </div>
       )}
 
@@ -193,7 +225,7 @@ export function ProposalCard({
       {/* Results */}
       {p.isRevealed && total > 0 && (
         <div className="mt-4 pt-4 border-t border-white/10">
-          <div className="flex justify-between text-sm mb-2">
+          <div className="flex flex-wrap justify-between text-sm mb-2 gap-1">
             <span className="text-green-400">Yes: {yes} ({yesPct}%)</span>
             <span className="text-red-400">No: {no} ({noPct}%)</span>
             {abstain > 0 && <span className="text-slate-400">Abstain: {abstain} ({abstainPct}%)</span>}
@@ -204,6 +236,7 @@ export function ProposalCard({
             {abstainPct > 0 && <div className="bg-slate-500 h-full" style={{ width: abstainPct + "%" }} />}
           </div>
           <p className="text-center text-xs text-gray-400 mt-2">Total: {total} votes</p>
+          <ExportResults proposal={p} />
         </div>
       )}
 
@@ -219,11 +252,11 @@ export function ProposalCard({
               </div>
               <LockIcon className="w-4 h-4 text-cyan-400/50" />
             </div>
-            <div className="relative flex items-center justify-center gap-3 mt-2">
+            <div className="relative flex items-center justify-center gap-3 mt-2 flex-wrap">
               <span className="text-[10px] text-cyan-400/60 flex items-center gap-1">
                 <LockIcon className="w-2.5 h-2.5" /> Encrypted Shared State
               </span>
-              <span className="text-[10px] text-gray-600">|</span>
+              <span className="text-[10px] text-gray-600 hidden sm:inline">|</span>
               <span className="text-[10px] text-purple-400/60 flex items-center gap-1">
                 <ShieldCheckIcon className="w-2.5 h-2.5" /> Correctness Proofs
               </span>
