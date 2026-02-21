@@ -342,13 +342,13 @@ pub mod private_dao_voting {
     }
 
     /// Callback from Arcium with revealed results
+    /// Only callable by the Arcium program via CPI (validated by signer constraint)
     pub fn reveal_results_callback(
         ctx: Context<RevealResultsCallback>,
-        yes_count: u32,
-        no_count: u32,
-        abstain_count: u32,
-        total_votes: u32,
-        winner: u8,
+        yes_count: u64,
+        no_count: u64,
+        abstain_count: u64,
+        total_votes: u64,
     ) -> Result<()> {
         let proposal = &mut ctx.accounts.proposal;
         proposal.is_active = false;
@@ -356,6 +356,14 @@ pub mod private_dao_voting {
         proposal.yes_votes = yes_count;
         proposal.no_votes = no_count;
         proposal.abstain_votes = abstain_count;
+
+        let winner: u8 = if yes_count > no_count {
+            1
+        } else if no_count > yes_count {
+            2
+        } else {
+            0
+        };
 
         emit!(ResultsRevealed {
             proposal: proposal.key(),
@@ -490,9 +498,9 @@ pub mod private_dao_voting {
     /// Dev mode: Reveal results with provided counts (simulates MXE callback)
     pub fn dev_reveal_results(
         ctx: Context<DevRevealResults>,
-        yes_count: u32,
-        no_count: u32,
-        abstain_count: u32,
+        yes_count: u64,
+        no_count: u64,
+        abstain_count: u64,
     ) -> Result<()> {
         let proposal = &mut ctx.accounts.proposal;
 
@@ -674,8 +682,19 @@ pub struct VoteCallback<'info> {
     #[account(mut)]
     pub proposal: Account<'info, Proposal>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = tally.proposal == proposal.key()
+    )]
     pub tally: Account<'info, Tally>,
+
+    /// Sign PDA: ensures this callback was invoked via Arcium CPI
+    #[account(
+        seeds = [SIGN_SEED],
+        bump,
+        signer
+    )]
+    pub sign_seed: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
@@ -726,6 +745,14 @@ pub struct RevealResults<'info> {
 pub struct RevealResultsCallback<'info> {
     #[account(mut)]
     pub proposal: Account<'info, Proposal>,
+
+    /// Sign PDA: ensures this callback was invoked via Arcium CPI
+    #[account(
+        seeds = [SIGN_SEED],
+        bump,
+        signer
+    )]
+    pub sign_seed: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
@@ -844,13 +871,13 @@ pub struct Proposal {
     pub voting_ends_at: i64,
     pub is_active: bool,
     pub is_revealed: bool,
-    pub total_votes: u32,
+    pub total_votes: u64,
     pub gate_mint: Pubkey,
     pub min_balance: u64,
     pub mxe_program_id: Pubkey,
-    pub yes_votes: u32,
-    pub no_votes: u32,
-    pub abstain_votes: u32,
+    pub yes_votes: u64,
+    pub no_votes: u64,
+    pub abstain_votes: u64,
     pub bump: u8,
 }
 
@@ -899,10 +926,10 @@ pub struct VoteCast {
 #[event]
 pub struct ResultsRevealed {
     pub proposal: Pubkey,
-    pub yes_votes: u32,
-    pub no_votes: u32,
-    pub abstain_votes: u32,
-    pub total_votes: u32,
+    pub yes_votes: u64,
+    pub no_votes: u64,
+    pub abstain_votes: u64,
+    pub total_votes: u64,
     pub winner: u8,
 }
 
