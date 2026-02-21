@@ -12,7 +12,7 @@ use arcium_client::idl::arcium::program::Arcium;
 use arcium_client::idl::arcium::types::{ArgumentList, ArgumentRef, CallbackInstruction};
 use arcium_client::pda::comp_def_offset;
 
-declare_id!("71tbXM3A2j5pKHfjtu1LYgY8jfQWuoZtHecDu6F6EPJH");
+declare_id!("XBdTCeLj6K8ociVWPectPoFQJ2Nowa6saHP2jM74ka8");
 
 // ==================== CONSTANTS ====================
 
@@ -22,6 +22,7 @@ pub const TALLY_SEED: &[u8] = b"tally";
 pub const VOTE_RECORD_SEED: &[u8] = b"vote_record";
 pub const SIGN_SEED: &[u8] = b"sign";
 pub const COMPUTATION_OFFSET_SEED: &[u8] = b"computation_offset";
+pub const DELEGATION_SEED: &[u8] = b"delegation";
 
 /// Computation definition names (must match encrypted-ixs)
 pub const INIT_TALLY_COMP: &str = "init_tally";
@@ -406,6 +407,7 @@ pub mod private_dao_voting {
         voting_ends_at: i64,
         gate_mint: Pubkey,
         min_balance: u64,
+        quorum: u64,
     ) -> Result<()> {
         let proposal = &mut ctx.accounts.proposal;
         proposal.id = proposal_id;
@@ -419,12 +421,42 @@ pub mod private_dao_voting {
         proposal.gate_mint = gate_mint;
         proposal.min_balance = min_balance;
         proposal.mxe_program_id = Pubkey::default();
+        proposal.quorum = quorum;
         proposal.bump = ctx.bumps.proposal;
 
         emit!(ProposalCreated {
             proposal_id,
             authority: ctx.accounts.authority.key(),
             voting_ends_at,
+        });
+
+        Ok(())
+    }
+
+    /// Delegate voting power to another address
+    /// The delegator's token-gated vote weight is transferred to the delegate.
+    /// Delegators cannot vote directly while their delegation is active.
+    pub fn delegate_vote(ctx: Context<DelegateVote>) -> Result<()> {
+        let delegation = &mut ctx.accounts.delegation;
+        delegation.delegator = ctx.accounts.delegator.key();
+        delegation.delegate = ctx.accounts.delegate.key();
+        delegation.created_at = Clock::get()?.unix_timestamp;
+        delegation.bump = ctx.bumps.delegation;
+
+        emit!(VoteDelegated {
+            delegator: ctx.accounts.delegator.key(),
+            delegate: ctx.accounts.delegate.key(),
+        });
+
+        Ok(())
+    }
+
+    /// Revoke a previously created delegation
+    pub fn revoke_delegation(_ctx: Context<RevokeDelegation>) -> Result<()> {
+        // Account is closed by the close constraint
+        emit!(DelegationRevoked {
+            delegator: _ctx.accounts.delegation.delegator,
+            delegate: _ctx.accounts.delegation.delegate,
         });
 
         Ok(())
@@ -512,13 +544,20 @@ pub mod private_dao_voting {
             VotingError::VotingNotEnded
         );
 
+        // Check quorum if set
+        let total_votes = yes_count + no_count + abstain_count;
+        if proposal.quorum > 0 {
+            require!(
+                total_votes >= proposal.quorum,
+                VotingError::QuorumNotReached
+            );
+        }
+
         proposal.is_active = false;
         proposal.is_revealed = true;
         proposal.yes_votes = yes_count;
         proposal.no_votes = no_count;
         proposal.abstain_votes = abstain_count;
-
-        let total_votes = yes_count + no_count + abstain_count;
         let winner = if yes_count > no_count {
             1u8
         } else if no_count > yes_count {
@@ -685,7 +724,7 @@ pub struct VoteCallback<'info> {
     )]
     pub tally: Account<'info, Tally>,
 
-    /// Sign PDA: ensures this callback was invoked via Arcium CPI
+    /// CHECK: Sign PDA ensures this callback was invoked via Arcium CPI
     #[account(
         seeds = [SIGN_SEED],
         bump,
@@ -743,7 +782,7 @@ pub struct RevealResultsCallback<'info> {
     #[account(mut)]
     pub proposal: Account<'info, Proposal>,
 
-    /// Sign PDA: ensures this callback was invoked via Arcium CPI
+    /// CHECK: Sign PDA ensures this callback was invoked via Arcium CPI
     #[account(
         seeds = [SIGN_SEED],
         bump,
@@ -854,6 +893,41 @@ pub struct DevRevealResults<'info> {
     pub proposal: Account<'info, Proposal>,
 }
 
+#[derive(Accounts)]
+pub struct DelegateVote<'info> {
+    #[account(mut)]
+    pub delegator: Signer<'info>,
+
+    /// CHECK: The delegate address (any valid pubkey)
+    pub delegate: AccountInfo<'info>,
+
+    #[account(
+        init,
+        payer = delegator,
+        space = 8 + Delegation::INIT_SPACE,
+        seeds = [DELEGATION_SEED, delegator.key().as_ref()],
+        bump
+    )]
+    pub delegation: Account<'info, Delegation>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RevokeDelegation<'info> {
+    #[account(mut)]
+    pub delegator: Signer<'info>,
+
+    #[account(
+        mut,
+        close = delegator,
+        seeds = [DELEGATION_SEED, delegator.key().as_ref()],
+        bump = delegation.bump,
+        constraint = delegation.delegator == delegator.key()
+    )]
+    pub delegation: Account<'info, Delegation>,
+}
+
 // ==================== STATE ACCOUNTS ====================
 
 #[account]
@@ -875,6 +949,17 @@ pub struct Proposal {
     pub yes_votes: u64,
     pub no_votes: u64,
     pub abstain_votes: u64,
+    /// Minimum number of votes required for the result to be valid (0 = no quorum)
+    pub quorum: u64,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct Delegation {
+    pub delegator: Pubkey,
+    pub delegate: Pubkey,
+    pub created_at: i64,
     pub bump: u8,
 }
 
@@ -921,6 +1006,18 @@ pub struct VoteCast {
 }
 
 #[event]
+pub struct VoteDelegated {
+    pub delegator: Pubkey,
+    pub delegate: Pubkey,
+}
+
+#[event]
+pub struct DelegationRevoked {
+    pub delegator: Pubkey,
+    pub delegate: Pubkey,
+}
+
+#[event]
 pub struct ResultsRevealed {
     pub proposal: Pubkey,
     pub yes_votes: u64,
@@ -950,4 +1047,8 @@ pub enum VotingError {
     InvalidTokenMint,
     #[msg("Insufficient token balance to vote")]
     InsufficientTokenBalance,
+    #[msg("Quorum not reached: not enough votes cast")]
+    QuorumNotReached,
+    #[msg("Cannot vote directly while delegation is active")]
+    ActiveDelegation,
 }

@@ -1,5 +1,5 @@
 {
-  "address": "71tbXM3A2j5pKHfjtu1LYgY8jfQWuoZtHecDu6F6EPJH",
+  "address": "XBdTCeLj6K8ociVWPectPoFQJ2Nowa6saHP2jM74ka8",
   "metadata": {
     "name": "private_dao_voting",
     "version": "0.1.0",
@@ -345,6 +345,66 @@
       ]
     },
     {
+      "name": "delegate_vote",
+      "docs": [
+        "Delegate voting power to another address",
+        "The delegator's token-gated vote weight is transferred to the delegate.",
+        "Delegators cannot vote directly while their delegation is active."
+      ],
+      "discriminator": [
+        12,
+        116,
+        204,
+        68,
+        87,
+        205,
+        40,
+        205
+      ],
+      "accounts": [
+        {
+          "name": "delegator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "delegate"
+        },
+        {
+          "name": "delegation",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "delegator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "dev_cast_vote",
       "docs": [
         "Dev mode: Cast vote without Arcium CPI (token gating still enforced)"
@@ -522,6 +582,10 @@
         {
           "name": "min_balance",
           "type": "u64"
+        },
+        {
+          "name": "quorum",
+          "type": "u64"
         }
       ]
     },
@@ -607,15 +671,15 @@
       "args": [
         {
           "name": "yes_count",
-          "type": "u32"
+          "type": "u64"
         },
         {
           "name": "no_count",
-          "type": "u32"
+          "type": "u64"
         },
         {
           "name": "abstain_count",
-          "type": "u32"
+          "type": "u64"
         }
       ]
     },
@@ -898,7 +962,8 @@
     {
       "name": "reveal_results_callback",
       "docs": [
-        "Callback from Arcium with revealed results"
+        "Callback from Arcium with revealed results",
+        "Only callable by the Arcium program via CPI (validated by signer constraint)"
       ],
       "discriminator": [
         3,
@@ -914,30 +979,94 @@
         {
           "name": "proposal",
           "writable": true
+        },
+        {
+          "name": "sign_seed",
+          "signer": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  105,
+                  103,
+                  110
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
         {
           "name": "yes_count",
-          "type": "u32"
+          "type": "u64"
         },
         {
           "name": "no_count",
-          "type": "u32"
+          "type": "u64"
         },
         {
           "name": "abstain_count",
-          "type": "u32"
+          "type": "u64"
         },
         {
           "name": "total_votes",
-          "type": "u32"
-        },
-        {
-          "name": "winner",
-          "type": "u8"
+          "type": "u64"
         }
       ]
+    },
+    {
+      "name": "revoke_delegation",
+      "docs": [
+        "Revoke a previously created delegation"
+      ],
+      "discriminator": [
+        188,
+        92,
+        135,
+        67,
+        160,
+        181,
+        54,
+        62
+      ],
+      "accounts": [
+        {
+          "name": "delegator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "delegation",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "delegator"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
     },
     {
       "name": "vote_callback",
@@ -962,6 +1091,23 @@
         {
           "name": "tally",
           "writable": true
+        },
+        {
+          "name": "sign_seed",
+          "signer": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  105,
+                  103,
+                  110
+                ]
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -998,6 +1144,19 @@
         32,
         229,
         22
+      ]
+    },
+    {
+      "name": "Delegation",
+      "discriminator": [
+        237,
+        90,
+        140,
+        159,
+        124,
+        255,
+        243,
+        80
       ]
     },
     {
@@ -1042,6 +1201,19 @@
   ],
   "events": [
     {
+      "name": "DelegationRevoked",
+      "discriminator": [
+        59,
+        158,
+        142,
+        49,
+        164,
+        116,
+        220,
+        8
+      ]
+    },
+    {
       "name": "ProposalCreated",
       "discriminator": [
         186,
@@ -1078,6 +1250,19 @@
         17,
         225,
         213
+      ]
+    },
+    {
+      "name": "VoteDelegated",
+      "discriminator": [
+        108,
+        148,
+        160,
+        229,
+        235,
+        105,
+        132,
+        52
       ]
     }
   ],
@@ -1121,6 +1306,16 @@
       "code": 6007,
       "name": "InsufficientTokenBalance",
       "msg": "Insufficient token balance to vote"
+    },
+    {
+      "code": 6008,
+      "name": "QuorumNotReached",
+      "msg": "Quorum not reached: not enough votes cast"
+    },
+    {
+      "code": 6009,
+      "name": "ActiveDelegation",
+      "msg": "Cannot vote directly while delegation is active"
     }
   ],
   "types": [
@@ -1132,6 +1327,46 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Delegation",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "delegator",
+            "type": "pubkey"
+          },
+          {
+            "name": "delegate",
+            "type": "pubkey"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DelegationRevoked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "delegator",
+            "type": "pubkey"
+          },
+          {
+            "name": "delegate",
+            "type": "pubkey"
           }
         ]
       }
@@ -1171,7 +1406,7 @@
           },
           {
             "name": "total_votes",
-            "type": "u32"
+            "type": "u64"
           },
           {
             "name": "gate_mint",
@@ -1187,15 +1422,22 @@
           },
           {
             "name": "yes_votes",
-            "type": "u32"
+            "type": "u64"
           },
           {
             "name": "no_votes",
-            "type": "u32"
+            "type": "u64"
           },
           {
             "name": "abstain_votes",
-            "type": "u32"
+            "type": "u64"
+          },
+          {
+            "name": "quorum",
+            "docs": [
+              "Minimum number of votes required for the result to be valid (0 = no quorum)"
+            ],
+            "type": "u64"
           },
           {
             "name": "bump",
@@ -1235,19 +1477,19 @@
           },
           {
             "name": "yes_votes",
-            "type": "u32"
+            "type": "u64"
           },
           {
             "name": "no_votes",
-            "type": "u32"
+            "type": "u64"
           },
           {
             "name": "abstain_votes",
-            "type": "u32"
+            "type": "u64"
           },
           {
             "name": "total_votes",
-            "type": "u32"
+            "type": "u64"
           },
           {
             "name": "winner",
@@ -1301,6 +1543,22 @@
           },
           {
             "name": "voter",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteDelegated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "delegator",
+            "type": "pubkey"
+          },
+          {
+            "name": "delegate",
             "type": "pubkey"
           }
         ]

@@ -52,14 +52,15 @@ export async function devCreateProposal(
   description: string,
   durationSeconds: number,
   gateMint: PublicKey,
-  minBalance: BN
+  minBalance: BN,
+  quorum: BN = new BN(0)
 ): Promise<{ tx: string; proposalId: BN; proposalPDA: PublicKey }> {
   const proposalId = new BN(Date.now());
   const [proposalPDA] = findProposalPDA(proposalId);
   const votingEndsAt = new BN(Math.floor(Date.now() / 1000) + durationSeconds);
 
   const tx = await program.methods
-    .devCreateProposal(proposalId, title, description, votingEndsAt, gateMint, minBalance)
+    .devCreateProposal(proposalId, title, description, votingEndsAt, gateMint, minBalance, quorum)
     .accounts({
       authority,
       proposal: proposalPDA,
@@ -68,6 +69,58 @@ export async function devCreateProposal(
     .rpc();
 
   return { tx, proposalId, proposalPDA };
+}
+
+// Delegation helpers
+export function findDelegationPDA(delegator: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("delegation"), delegator.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
+export async function delegateVote(
+  program: Program,
+  delegator: PublicKey,
+  delegate: PublicKey
+): Promise<string> {
+  const [delegationPDA] = findDelegationPDA(delegator);
+  return await program.methods
+    .delegateVote()
+    .accounts({
+      delegator,
+      delegate,
+      delegation: delegationPDA,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+
+export async function revokeDelegation(
+  program: Program,
+  delegator: PublicKey
+): Promise<string> {
+  const [delegationPDA] = findDelegationPDA(delegator);
+  return await program.methods
+    .revokeDelegation()
+    .accounts({
+      delegator,
+      delegation: delegationPDA,
+    })
+    .rpc();
+}
+
+export async function getDelegation(
+  program: Program,
+  delegator: PublicKey
+): Promise<{ delegate: PublicKey; createdAt: number } | null> {
+  const [delegationPDA] = findDelegationPDA(delegator);
+  try {
+    const data = await (program.account as any).delegation.fetch(delegationPDA);
+    return { delegate: data.delegate, createdAt: data.createdAt?.toNumber() ?? 0 };
+  } catch {
+    return null;
+  }
 }
 
 // Dev mode: Initialize tally for a proposal
