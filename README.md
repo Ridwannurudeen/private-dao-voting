@@ -12,6 +12,9 @@ Votes are encrypted client-side, tallied inside Arcium's MXE without ever being 
 
 ## Demo
 
+<!-- Replace with your recorded demo GIF showing the full voting flow -->
+<!-- ![Demo](docs/demo.gif) -->
+
 | Landing Page (Dark) | Feature Cards | Light Theme | How It Works |
 |:---:|:---:|:---:|:---:|
 | ![Landing](docs/screenshot-landing.png) | ![Features](docs/screenshot-features.png) | ![Light](docs/screenshot-light-theme.png) | ![How It Works](docs/screenshot-howitworks.png) |

@@ -23,11 +23,15 @@ export default function App({ Component, pageProps }: AppProps) {
         <meta property="og:description" content="Encrypted voting powered by Arcium MXE. Individual votes stay secret — only aggregate results are revealed with correctness proofs." />
         <meta property="og:url" content="https://privatedao-arcium.vercel.app" />
         <meta property="og:site_name" content="Private DAO Voting" />
+        <meta property="og:image" content="https://privatedao-arcium.vercel.app/og-image.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
 
         {/* Twitter Card */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Private DAO Voting" />
         <meta name="twitter:description" content="Encrypted governance on Solana. Votes tallied via Arcium MPC — no one sees how you voted." />
+        <meta name="twitter:image" content="https://privatedao-arcium.vercel.app/og-image.png" />
       </Head>
       <WalletProviderWrapper>
         <Component {...pageProps} />
