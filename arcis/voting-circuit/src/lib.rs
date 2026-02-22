@@ -214,8 +214,7 @@ pub fn finalize_with_threshold(
 
     let quorum_met = quorum == 0 || total_votes >= quorum;
     let non_abstain = yes_votes + no_votes;
-    let threshold_met =
-        non_abstain > 0 && (yes_votes * 10_000) / non_abstain >= threshold_bps;
+    let threshold_met = non_abstain > 0 && (yes_votes * 10_000) / non_abstain >= threshold_bps;
 
     (
         yes_votes,
