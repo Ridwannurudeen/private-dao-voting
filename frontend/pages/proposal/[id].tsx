@@ -25,6 +25,7 @@ import {
 import { ProposalCard, Proposal } from "../../components/ProposalCard";
 import { Toast, ToastData } from "../../components/Toast";
 import { LockIcon, ShieldCheckIcon } from "../../components/Icons";
+import { parseAnchorError, explorerTxUrl } from "../../lib/errors";
 
 import generatedIdl from "../../idl/private_dao_voting.json";
 
@@ -163,7 +164,7 @@ export default function ProposalDetail() {
       const secretInput = client.toSecretInput(encryptedVote, publicKey);
       setIsEncrypting(false);
 
-      await devCastVote(
+      const txSig = await devCastVote(
         program, publicKey, p.publicKey, p.gateMint,
         secretInput.encryptedChoice, secretInput.nonce, secretInput.voterPubkey
       );
@@ -184,14 +185,14 @@ export default function ProposalDetail() {
         });
       }
 
-      setToast({ message: "Encrypted vote recorded on-chain!", type: "success" });
+      setToast({ message: "Encrypted vote recorded on-chain!", type: "success", txUrl: explorerTxUrl(txSig) });
       setVoted(true);
       setSelected(null);
       load();
     } catch (e: any) {
       console.error("Vote error:", e);
       setIsEncrypting(false);
-      setToast({ message: e.message || "Vote failed", type: "error" });
+      setToast({ message: parseAnchorError(e), type: "error" });
     }
     setVoting(false);
   };
@@ -203,11 +204,11 @@ export default function ProposalDetail() {
     setRevealing(true);
     try {
       const tally = devTallies[key] || { yes: 0, no: 0, abstain: 0 };
-      await devRevealResults(program, publicKey, p.publicKey, tally.yes, tally.no, tally.abstain);
-      setToast({ message: "Results revealed!", type: "success" });
+      const txSig = await devRevealResults(program, publicKey, p.publicKey, tally.yes, tally.no, tally.abstain);
+      setToast({ message: "Results revealed!", type: "success", txUrl: explorerTxUrl(txSig) });
       load();
     } catch (e: any) {
-      setToast({ message: e.message || "Reveal failed", type: "error" });
+      setToast({ message: parseAnchorError(e), type: "error" });
     }
     setRevealing(false);
   };

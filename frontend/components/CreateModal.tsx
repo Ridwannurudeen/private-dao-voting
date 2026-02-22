@@ -20,11 +20,37 @@ export function CreateModal({ isOpen, onClose, onSubmit, loading }: CreateModalP
   const [minBalance, setMinBalance] = useState("1");
   const [quorum, setQuorum] = useState("0");
 
+  const [validationError, setValidationError] = useState("");
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (title.trim() && desc.trim() && gateMint.trim() && minBalance.trim()) {
-      onSubmit(title, desc, duration, gateMint.trim(), minBalance.trim(), quorum.trim() || "0");
+    setValidationError("");
+
+    if (!title.trim() || !desc.trim()) {
+      setValidationError("Title and description are required.");
+      return;
     }
+
+    try {
+      new PublicKey(gateMint.trim());
+    } catch {
+      setValidationError("Invalid gate token mint address.");
+      return;
+    }
+
+    const bal = Number(minBalance.trim());
+    if (isNaN(bal) || bal < 0 || !Number.isInteger(bal)) {
+      setValidationError("Minimum balance must be a non-negative integer.");
+      return;
+    }
+
+    const q = Number(quorum.trim() || "0");
+    if (isNaN(q) || q < 0 || !Number.isInteger(q)) {
+      setValidationError("Quorum must be a non-negative integer.");
+      return;
+    }
+
+    onSubmit(title, desc, duration, gateMint.trim(), minBalance.trim(), quorum.trim() || "0");
   };
 
   const durations = [
@@ -94,6 +120,11 @@ export function CreateModal({ isOpen, onClose, onSubmit, loading }: CreateModalP
             disabled={loading}
           />
         </div>
+        {validationError && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+            <p className="text-sm text-red-400">{validationError}</p>
+          </div>
+        )}
         <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-4">
           <div className="flex items-center gap-2">
             <ShieldCheckIcon className="w-4 h-4 text-cyan-400" />

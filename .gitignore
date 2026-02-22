@@ -1,8 +1,28 @@
 node_modules/
 target/
 .anchor/
+test-ledger/
+
+# Environment
 .env
 .env.local
-.env*.local
-test-ledger/
+.env.production
+.env.*.local
+.env.production.local
+
+# Build artifacts
+dist/
+.cargo/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Tools
 arcup.exe
