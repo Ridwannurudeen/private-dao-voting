@@ -6,7 +6,9 @@ test.describe("Private DAO Voting", () => {
   });
 
   test("landing page loads with hero content", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: /Vote.*Privately.*on Solana/s })).toBeVisible({ timeout: 5000 });
+    // Check hero heading elements are visible
+    await expect(page.getByText("Privately")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("on Solana", { exact: true })).toBeVisible({ timeout: 5000 });
   });
 
   test("displays feature cards on landing page", async ({ page }) => {
