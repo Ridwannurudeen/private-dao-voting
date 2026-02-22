@@ -13,18 +13,28 @@ export function Toast({ message, type, onClose }: { message: string; type: Toast
     return () => clearTimeout(timer);
   }, [onClose]);
 
-  const colors: Record<string, string> = {
-    success: "bg-green-500/10 backdrop-blur-xl border-green-500/30 text-green-400 shadow-lg shadow-green-500/10",
-    error: "bg-red-500/10 backdrop-blur-xl border-red-500/30 text-red-400 shadow-lg shadow-red-500/10",
-    info: "bg-cyan-500/10 backdrop-blur-xl border-cyan-500/30 text-cyan-400 shadow-lg shadow-cyan-500/10",
+  const styles: Record<string, { bg: string; icon: string }> = {
+    success: {
+      bg: "bg-green-500/10 border-green-500/20 text-green-400 shadow-[0_8px_32px_rgba(34,197,94,0.15)]",
+      icon: "\u2713",
+    },
+    error: {
+      bg: "bg-red-500/10 border-red-500/20 text-red-400 shadow-[0_8px_32px_rgba(239,68,68,0.15)]",
+      icon: "\u2715",
+    },
+    info: {
+      bg: "bg-cyan-500/10 border-cyan-500/20 text-cyan-400 shadow-[0_8px_32px_rgba(34,211,238,0.15)]",
+      icon: "\u2139",
+    },
   };
-  const icons: Record<string, string> = { success: "\u2713", error: "\u2715", info: "\uD83D\uDD10" };
+
+  const s = styles[type];
 
   return (
-    <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-xl flex items-center gap-3 z-50 border ${colors[type]}`}>
-      <span>{icons[type]}</span>
-      <span>{message}</span>
-      <button onClick={onClose} className="ml-2 hover:opacity-70">&times;</button>
+    <div className={`fixed bottom-6 right-6 z-50 backdrop-blur-xl rounded-2xl border px-5 py-4 flex items-center gap-3 max-w-sm animate-[slideUp_0.3s_ease-out] ${s.bg}`}>
+      <span className="text-lg">{s.icon}</span>
+      <span className="text-sm leading-snug flex-1">{message}</span>
+      <button onClick={onClose} className="ml-1 opacity-60 hover:opacity-100 transition-opacity text-lg">&times;</button>
     </div>
   );
 }

@@ -16,6 +16,10 @@ module.exports = {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },
         },
+        slideUp: {
+          '0%': { transform: 'translateY(20px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
       },
       boxShadow: {
         'cyan-glow': '0 0 15px rgba(34,211,238,0.35), 0 0 40px rgba(34,211,238,0.1)',
