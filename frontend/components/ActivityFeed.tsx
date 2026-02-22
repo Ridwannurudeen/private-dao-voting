@@ -92,7 +92,7 @@ export function ActivityFeed({ connection }: ActivityFeedProps) {
 
   if (loading) {
     return (
-      <div className="glass-card p-4 border border-white/5">
+      <div className="glass-card-elevated p-4">
         <h3 className="text-sm font-semibold text-gray-300 mb-3">Recent Activity</h3>
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
@@ -106,7 +106,7 @@ export function ActivityFeed({ connection }: ActivityFeedProps) {
   if (activities.length === 0) return null;
 
   return (
-    <div className="glass-card p-4 border border-white/5">
+    <div className="glass-card-elevated p-4">
       <h3 className="text-sm font-semibold text-gray-300 mb-3">Recent Activity</h3>
       <div className="space-y-2 max-h-64 overflow-y-auto">
         {activities.map((a) => (

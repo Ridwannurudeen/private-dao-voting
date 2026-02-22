@@ -99,7 +99,7 @@ export function ProposalCard({
   };
 
   return (
-    <div className="glass-card neon-border p-4 sm:p-6 relative group">
+    <div className="glass-card-elevated neon-border p-4 sm:p-6 relative group">
       {isAuthority && (
         <button onClick={onToggleHide} title="Hide proposal"
           className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all p-1">
