@@ -340,7 +340,7 @@ export default function ProposalDetail() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Voting Ends</span>
-                  <span className="text-gray-300">{new Date(proposal.votingEndsAt.toNumber() * 1000).toLocaleString()}</span>
+                  <span className="text-gray-300">{new Date(Number(proposal.votingEndsAt) * 1000).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Program</span>
