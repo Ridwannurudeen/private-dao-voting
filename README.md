@@ -40,6 +40,18 @@ Votes are encrypted client-side, tallied inside Arcium's MXE without ever being 
 - Mobile-responsive design
 - PWA-installable (manifest.json)
 
+### V2.0 Features
+
+- **Passing Threshold** — Configurable basis-point threshold (e.g., simple majority, two-thirds, 80%) separate from quorum. Abstain votes excluded from threshold calculation.
+- **Three Privacy Levels** — Full Privacy (all hidden until end), Partial Privacy (voter list revealed after, choices hidden), Transparent Tally (live running totals, individual choices still hidden).
+- **4-Step Vote Progress** — Animated privacy processing UX showing Encrypting -> Submitting -> MPC Processing -> Confirmed with per-step indicators.
+- **Markdown Descriptions** — Rich text proposal descriptions with live preview, tables, headings, links. Rendered via `react-markdown` with XSS sanitization.
+- **Discussion Integration** — Optional external forum URL with privacy notices (IP warning, no wallet leak).
+- **Execution Timelock** — Configurable delay between result reveal and on-chain action execution.
+- **DaoConfig Account** — On-chain DAO configuration for proposal deposits, treasury, and slash policies.
+- **Anti-Spam** — Rate limiting (max 3 active proposals per wallet, 1-hour cooldown) enforced at program level.
+- **New Circuit Functions** — `get_live_tally()` for transparent mode, `finalize_with_threshold()` for pass/fail with quorum + threshold checks.
+
 ---
 
 ## Why Private Voting Matters
@@ -159,7 +171,7 @@ Key design decisions:
 ```
 private-dao-voting/
 ├── arcis/voting-circuit/          # Arcis MPC circuit (Rust)
-│   └── src/lib.rs                 #   VotingState, cast_vote, finalize_and_reveal
+│   └── src/lib.rs                 #   VotingState, cast_vote, finalize_and_reveal, get_live_tally, finalize_with_threshold
 ├── programs/private-dao-voting/   # Anchor/Solana program (Rust)
 │   └── src/lib.rs                 #   On-chain logic, token gating, delegation, quorum
 ├── tests/                         # Anchor integration tests
@@ -172,7 +184,8 @@ private-dao-voting/
 │   │   └── api/faucet.ts          #   Rate-limited dev token faucet
 │   ├── components/
 │   │   ├── ProposalCard.tsx       #   Proposal display, voting, countdown, export
-│   │   ├── CreateModal.tsx        #   Proposal creation form
+│   │   ├── CreateModal.tsx        #   V2 proposal form (threshold, privacy, markdown, discussion)
+│   │   ├── VoteProgress.tsx      #   4-step privacy processing animation
 │   │   ├── EncryptionAnimation.tsx #  Particle animation during vote encryption
 │   │   ├── Confetti.tsx           #   Celebration effect on successful vote
 │   │   ├── HowItWorks.tsx         #   Interactive 5-step walkthrough
@@ -368,7 +381,7 @@ cargo test
 |-------|-----------|-------|---------------|
 | **Anchor** | Mocha/Chai | 9 | Proposal lifecycle, vote casting, token gating, double-vote prevention, quorum enforcement, delegation create/revoke, non-authority rejection, tally initialization |
 | **E2E** | Playwright | 10 | Landing page hero, feature cards, wallet prompt, page title/meta, theme toggle, How It Works stepper (all 5 steps), proposal detail, PWA manifest validation, tech badges, footer |
-| **Circuit** | Rust `#[test]` | 10 | Mixed voting flow, single yes/no, all-yes, all-no, all-abstain, empty voting, large vote count (100 voters), vote count query, tally consistency invariant |
+| **Circuit** | Rust `#[test]` | 15 | Mixed voting flow, single yes/no, all-yes, all-no, all-abstain, empty voting, large vote count (100 voters), vote count query, tally consistency invariant, live tally, threshold pass/fail, quorum failure, abstain exclusion from threshold |
 | **CI** | GitHub Actions | 4 jobs | Frontend build + typecheck, Playwright E2E, Rust format check, npm security audit |
 
 ---

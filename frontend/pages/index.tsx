@@ -42,6 +42,7 @@ import { ActivityFeed } from "../components/ActivityFeed";
 import { Confetti } from "../components/Confetti";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { HowItWorks } from "../components/HowItWorks";
+import { VoteProgress, VoteStep } from "../components/VoteProgress";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 
 import generatedIdl from "../idl/private_dao_voting.json";
@@ -73,6 +74,7 @@ export default function Home() {
   const [delegating, setDelegating] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [voteStep, setVoteStep] = useState<Record<string, VoteStep>>({});
   const PROPOSALS_PER_PAGE = 10;
 
   // Dev mode: track local vote tallies since MXE isn't aggregating
@@ -188,6 +190,13 @@ export default function Home() {
             noVotes: a.noVotes ?? a.no_votes ?? 0,
             abstainVotes: a.abstainVotes ?? a.abstain_votes ?? 0,
             quorum: a.quorum ?? 0,
+            thresholdBps: a.thresholdBps ?? a.threshold_bps ?? 5001,
+            privacyLevel: a.privacyLevel ?? a.privacy_level ?? 0,
+            passed: a.passed ?? false,
+            discussionUrl: a.discussionUrl ?? a.discussion_url ?? "",
+            depositAmount: a.depositAmount ?? a.deposit_amount ?? 0,
+            executionDelay: a.executionDelay ?? a.execution_delay ?? 0,
+            executed: a.executed ?? false,
           });
         } catch {
           console.warn("Skipping undeserializable proposal account:", raw.pubkey.toBase58());
@@ -297,7 +306,18 @@ export default function Home() {
   };
 
   // Create proposal
-  const create = async (title: string, desc: string, duration: number, gateMintStr: string, minBalanceStr: string, quorumStr: string) => {
+  const create = async (
+    title: string,
+    desc: string,
+    duration: number,
+    gateMintStr: string,
+    minBalanceStr: string,
+    quorumStr: string,
+    thresholdBps: number,
+    privacyLevel: number,
+    discussionUrl: string,
+    executionDelay: number
+  ) => {
     const program = getProgram();
     if (!program || !publicKey) return;
     setCreating(true);
@@ -305,7 +325,10 @@ export default function Home() {
       const gateMint = new PublicKey(gateMintStr);
       const minBalance = new BN(minBalanceStr);
       const quorum = new BN(quorumStr || "0");
-      const result = await devCreateProposal(program, publicKey, title, desc, duration, gateMint, minBalance, quorum);
+      const result = await devCreateProposal(
+        program, publicKey, title, desc, duration, gateMint, minBalance, quorum,
+        thresholdBps, privacyLevel, discussionUrl, executionDelay
+      );
       await devInitTally(program, publicKey, result.proposalPDA);
       setToast({ message: "Proposal created with tally initialized!", type: "success", txUrl: explorerTxUrl(result.tx) });
       setModal(false);
@@ -324,6 +347,7 @@ export default function Home() {
 
     const key = proposal.publicKey.toString();
     setVoting((v) => ({ ...v, [key]: true }));
+    setVoteStep((s) => ({ ...s, [key]: "encrypting" }));
 
     try {
       let client = arciumClient;
@@ -339,6 +363,7 @@ export default function Home() {
       const encryptedVote = await client.encryptVote(voteValue, proposal.publicKey, publicKey);
       const secretInput = client.toSecretInput(encryptedVote, publicKey);
       setIsEncrypting(false);
+      setVoteStep((s) => ({ ...s, [key]: "submitting" }));
 
       let txSig: string;
       if (DEVELOPMENT_MODE) {
@@ -355,6 +380,8 @@ export default function Home() {
           arciumAccounts
         );
       }
+
+      setVoteStep((s) => ({ ...s, [key]: "processing" }));
 
       // In dev mode, track the vote choice locally for reveal
       if (DEVELOPMENT_MODE) {
@@ -373,6 +400,10 @@ export default function Home() {
         });
       }
 
+      // Brief delay to show processing step before confirmed
+      await new Promise((r) => setTimeout(r, 800));
+      setVoteStep((s) => ({ ...s, [key]: "confirmed" }));
+
       setToast({ message: "Encrypted vote recorded on-chain!", type: "success", txUrl: explorerTxUrl(txSig) });
       setVoted((v) => ({ ...v, [key]: true }));
       setSelected((s) => ({ ...s, [key]: null }));
@@ -381,6 +412,7 @@ export default function Home() {
     } catch (e: any) {
       console.error("Vote error:", e);
       setIsEncrypting(false);
+      setVoteStep((s) => ({ ...s, [key]: "idle" }));
       setToast({ message: parseAnchorError(e), type: "error" });
     }
     setVoting((v) => ({ ...v, [key]: false }));
@@ -613,11 +645,13 @@ export default function Home() {
                       isRevealing={revealing[key] || false}
                       isClaiming={claiming[key] || false}
                       isEncrypting={isEncrypting}
+                      currentVoteStep={voteStep[key] || "idle"}
                       onSelectChoice={(choice) => setSelected((s) => ({ ...s, [key]: choice }))}
                       onVote={() => vote(p, selected[key]!)}
                       onReveal={() => reveal(p)}
                       onClaimTokens={() => claimTokens(p)}
                       onToggleHide={() => toggleHideProposal(key)}
+                      onVoteStepComplete={() => setVoteStep((s) => ({ ...s, [key]: "idle" }))}
                     />
                   );
                 })}
