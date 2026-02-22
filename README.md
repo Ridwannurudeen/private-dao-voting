@@ -12,9 +12,10 @@ Votes are encrypted client-side, tallied inside Arcium's MXE without ever being 
 
 ## Demo
 
-| Create Proposal | Cast Encrypted Vote | Revealed Results |
-|:---:|:---:|:---:|
-| Token-gated proposals with quorum thresholds and vote delegation | Votes encrypted client-side via x25519 + RescueCipher before submission | Aggregate results with correctness proofs, exportable as CSV/JSON |
+| Landing Page (Dark) | Feature Cards | Light Theme | How It Works |
+|:---:|:---:|:---:|:---:|
+| ![Landing](docs/screenshot-landing.png) | ![Features](docs/screenshot-features.png) | ![Light](docs/screenshot-light-theme.png) | ![How It Works](docs/screenshot-howitworks.png) |
+| Hero with "Vote Privately on Solana" and wallet connect | Encrypted Votes, MPC Tallying, Verified Results cards with tech badges | Full light theme support with localStorage persistence | Interactive 5-step guided walkthrough |
 
 > **Try it live:** [privatedao-arcium.vercel.app](https://privatedao-arcium.vercel.app/) — Connect a Solana devnet wallet to create proposals and cast encrypted votes.
 
@@ -50,6 +51,17 @@ Public on-chain voting is broken:
 | **Voter apathy** | People abstain rather than face backlash for unpopular positions |
 
 Private DAO Voting eliminates all four. Your vote is encrypted the moment you click — the tally happens inside Arcium's encrypted shared state, and only the final result is ever revealed.
+
+### Privacy Benefits Provided by Arcium
+
+| Benefit | How Arcium Delivers It |
+|---------|----------------------|
+| **Vote secrecy** | Individual votes are encrypted with x25519 ECDH + RescueCipher before leaving the browser. The MXE processes votes as `Enc<Shared, u8>` secret shares — no single Arx Node ever sees a plaintext vote. |
+| **Coercion resistance** | Since votes are never individually decryptable (not even by the DAO authority or Solana validators), no one can prove how you voted. Vote buying becomes economically irrational. |
+| **Tally integrity** | Arcium's MXE produces cryptographic correctness proofs that the published aggregate (yes/no/abstain counts) is the mathematically valid sum of all encrypted inputs. The result is verifiable without revealing individual votes. |
+| **Front-running prevention** | Encrypted tally state is opaque until `finalize_and_reveal` is called after the voting deadline. No one can see interim results and vote strategically. |
+| **Threshold trust model** | Votes are split into secret shares across multiple independent Arx Nodes. Compromising a single node reveals nothing — an attacker would need to collude with a threshold of nodes to break privacy. |
+| **Minimal on-chain footprint** | Only encrypted ciphertext is stored on Solana. The decryption and aggregation happen inside the MXE, so the blockchain never contains plaintext vote data — not during voting, not after reveal. |
 
 ---
 
@@ -175,8 +187,9 @@ private-dao-voting/
 │   │   └── useKeyboardShortcuts.ts #  Keyboard shortcut handler
 │   ├── lib/
 │   │   ├── arcium.ts              #   Arcium client (encryption, MXE integration)
-│   │   ├── contract.ts            #   Solana program helpers (PDAs, delegation)
-│   │   └── errors.ts              #   Error parsing + Explorer URL helper
+│   │   ├── contract.ts            #   Solana program helpers (PDAs, delegation, retry)
+│   │   ├── errors.ts              #   Error parsing + Explorer URL helper
+│   │   └── retry.ts               #   Exponential backoff for RPC calls
 │   ├── e2e/
 │   │   └── voting-flow.spec.ts    #   Playwright E2E tests
 │   └── public/
@@ -348,11 +361,12 @@ cargo test
 
 **Test coverage:**
 
-| Layer | Framework | What's tested |
-|-------|-----------|---------------|
-| **Anchor** | Mocha/Chai | Proposal lifecycle, vote casting, token gating, double-vote prevention, quorum enforcement, delegation, access control |
-| **E2E** | Playwright | Landing page, How It Works stepper, meta tags, PWA manifest, theme toggle, proposal detail |
-| **Circuit** | Rust `#[test]` | Voting flow, all-abstain, empty voting edge case |
+| Layer | Framework | Tests | What's tested |
+|-------|-----------|-------|---------------|
+| **Anchor** | Mocha/Chai | 9 | Proposal lifecycle, vote casting, token gating, double-vote prevention, quorum enforcement, delegation create/revoke, non-authority rejection, tally initialization |
+| **E2E** | Playwright | 10 | Landing page hero, feature cards, wallet prompt, page title/meta, theme toggle, How It Works stepper (all 5 steps), proposal detail, PWA manifest validation, tech badges, footer |
+| **Circuit** | Rust `#[test]` | 10 | Mixed voting flow, single yes/no, all-yes, all-no, all-abstain, empty voting, large vote count (100 voters), vote count query, tally consistency invariant |
+| **CI** | GitHub Actions | 4 jobs | Frontend build + typecheck, Playwright E2E, Rust format check, npm security audit |
 
 ---
 
