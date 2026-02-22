@@ -237,16 +237,24 @@ export default function Home() {
     setClaiming((c) => ({ ...c, [key]: false }));
   };
 
+  // Track previous connection state for disconnect detection
+  const [wasConnected, setWasConnected] = useState(false);
+
   // Auto-load when wallet connects, clear state on disconnect
   useEffect(() => {
     if (connected && anchorWallet) {
       load();
+      setWasConnected(true);
     } else {
+      if (wasConnected) {
+        setToast({ message: "Wallet disconnected. Reconnect to continue voting.", type: "info" });
+      }
       setProposals([]);
       setVoted({});
       setSelected({});
       setTokenBalances({});
       setDelegation(null);
+      setCurrentPage(1);
     }
   }, [connected, anchorWallet, load]);
 
@@ -564,13 +572,29 @@ export default function Home() {
                 )}
 
                 {!loading && proposals.length === 0 && (
-                  <div className="text-center py-20 glass-card-elevated p-8">
+                  <div className="text-center py-16 glass-card-elevated p-8">
                     <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-6">
                       <LockIcon className="w-8 h-8 text-purple-400" />
                     </div>
-                    <h3 className="text-xl font-semibold mb-2 text-white">No proposals yet</h3>
-                    <p className="text-gray-400 mb-6 max-w-sm mx-auto">Create the first private proposal to start encrypted governance</p>
-                    <button onClick={() => setModal(true)} className="btn-primary px-8 py-3">Create First Proposal</button>
+                    <h3 className="text-xl font-semibold mb-2 text-white">Welcome to Private DAO Voting</h3>
+                    <p className="text-gray-400 mb-6 max-w-md mx-auto">No proposals yet. Create the first one to start encrypted governance — votes are sealed with Arcium MPC and only aggregate results are revealed.</p>
+                    <button onClick={() => setModal(true)} className="btn-primary px-8 py-3 text-base">+ Create First Proposal</button>
+
+                    {/* Quick start guide */}
+                    <div className="mt-8 pt-6 border-t border-white/5 grid sm:grid-cols-3 gap-4 text-left max-w-lg mx-auto">
+                      <div className="flex items-start gap-2">
+                        <span className="text-cyan-400 text-sm font-bold mt-0.5">1.</span>
+                        <p className="text-xs text-gray-500">Create a proposal with a title, description, and voting duration</p>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-cyan-400 text-sm font-bold mt-0.5">2.</span>
+                        <p className="text-xs text-gray-500">Community members cast encrypted votes (YES / NO / ABSTAIN)</p>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-cyan-400 text-sm font-bold mt-0.5">3.</span>
+                        <p className="text-xs text-gray-500">After voting ends, reveal the aggregate results with correctness proofs</p>
+                      </div>
+                    </div>
                   </div>
                 )}
 
