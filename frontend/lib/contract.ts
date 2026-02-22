@@ -54,14 +54,30 @@ export async function devCreateProposal(
   durationSeconds: number,
   gateMint: PublicKey,
   minBalance: BN,
-  quorum: BN = new BN(0)
+  quorum: BN = new BN(0),
+  thresholdBps: number = 5001,
+  privacyLevel: number = 0,
+  discussionUrl: string = "",
+  executionDelay: number = 0
 ): Promise<{ tx: string; proposalId: BN; proposalPDA: PublicKey }> {
   const proposalId = new BN(Date.now());
   const [proposalPDA] = findProposalPDA(proposalId);
   const votingEndsAt = new BN(Math.floor(Date.now() / 1000) + durationSeconds);
 
   const tx = await program.methods
-    .devCreateProposal(proposalId, title, description, votingEndsAt, gateMint, minBalance, quorum)
+    .devCreateProposal(
+      proposalId,
+      title,
+      description,
+      votingEndsAt,
+      gateMint,
+      minBalance,
+      quorum,
+      thresholdBps,
+      privacyLevel,
+      discussionUrl,
+      new BN(executionDelay)
+    )
     .accounts({
       authority,
       proposal: proposalPDA,

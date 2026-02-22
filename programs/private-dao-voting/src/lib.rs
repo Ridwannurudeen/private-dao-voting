@@ -23,6 +23,19 @@ pub const VOTE_RECORD_SEED: &[u8] = b"vote_record";
 pub const SIGN_SEED: &[u8] = b"sign";
 pub const COMPUTATION_OFFSET_SEED: &[u8] = b"computation_offset";
 pub const DELEGATION_SEED: &[u8] = b"delegation";
+pub const DAO_CONFIG_SEED: &[u8] = b"dao_config";
+pub const PROPOSAL_COUNTER_SEED: &[u8] = b"proposal_counter";
+pub const DEPOSIT_ESCROW_SEED: &[u8] = b"deposit_escrow";
+
+/// Maximum active proposals per wallet (anti-spam)
+pub const MAX_ACTIVE_PROPOSALS: u8 = 3;
+/// Cooldown in seconds between proposals from the same wallet
+pub const PROPOSAL_COOLDOWN: i64 = 3600;
+
+/// Privacy levels
+pub const PRIVACY_FULL: u8 = 0;
+pub const PRIVACY_PARTIAL: u8 = 1;
+pub const PRIVACY_TRANSPARENT: u8 = 2;
 
 /// Computation definition names (must match encrypted-ixs)
 pub const INIT_TALLY_COMP: &str = "init_tally";
@@ -93,7 +106,19 @@ pub mod private_dao_voting {
         gate_mint: Pubkey,
         min_balance: u64,
         mxe_program_id: Pubkey,
+        threshold_bps: u16,
+        privacy_level: u8,
+        discussion_url: String,
+        execution_delay: i64,
     ) -> Result<()> {
+        // Validate V2 fields
+        require!(
+            threshold_bps > 0 && threshold_bps <= 10_000,
+            VotingError::InvalidThreshold
+        );
+        require!(privacy_level <= 2, VotingError::InvalidPrivacyLevel);
+        require!(execution_delay >= 0, VotingError::InvalidExecutionDelay);
+
         // Initialize proposal state
         let proposal = &mut ctx.accounts.proposal;
         proposal.id = proposal_id;
@@ -107,6 +132,14 @@ pub mod private_dao_voting {
         proposal.gate_mint = gate_mint;
         proposal.min_balance = min_balance;
         proposal.mxe_program_id = mxe_program_id;
+        proposal.threshold_bps = threshold_bps;
+        proposal.privacy_level = privacy_level;
+        proposal.passed = false;
+        proposal.discussion_url = discussion_url;
+        proposal.deposit_amount = 0;
+        proposal.deposit_returned = false;
+        proposal.execution_delay = execution_delay;
+        proposal.executed = false;
         proposal.bump = ctx.bumps.proposal;
 
         // Queue computation to initialize encrypted tally
@@ -371,11 +404,28 @@ pub mod private_dao_voting {
             );
         }
 
+        // Check threshold for production path too
+        let non_abstain = yes_count
+            .checked_add(no_count)
+            .ok_or(VotingError::ArithmeticOverflow)?;
+        let threshold_met = if non_abstain > 0 {
+            yes_count
+                .checked_mul(10_000)
+                .ok_or(VotingError::ArithmeticOverflow)?
+                / non_abstain
+                >= proposal.threshold_bps as u64
+        } else {
+            false
+        };
+
+        let quorum_met = proposal.quorum == 0 || total_votes >= proposal.quorum;
+
         proposal.is_active = false;
         proposal.is_revealed = true;
         proposal.yes_votes = yes_count;
         proposal.no_votes = no_count;
         proposal.abstain_votes = abstain_count;
+        proposal.passed = quorum_met && threshold_met;
 
         let winner: u8 = if yes_count > no_count {
             1
@@ -427,7 +477,19 @@ pub mod private_dao_voting {
         gate_mint: Pubkey,
         min_balance: u64,
         quorum: u64,
+        threshold_bps: u16,
+        privacy_level: u8,
+        discussion_url: String,
+        execution_delay: i64,
     ) -> Result<()> {
+        // Validate V2 fields
+        require!(
+            threshold_bps > 0 && threshold_bps <= 10_000,
+            VotingError::InvalidThreshold
+        );
+        require!(privacy_level <= 2, VotingError::InvalidPrivacyLevel);
+        require!(execution_delay >= 0, VotingError::InvalidExecutionDelay);
+
         let proposal = &mut ctx.accounts.proposal;
         proposal.id = proposal_id;
         proposal.authority = ctx.accounts.authority.key();
@@ -441,6 +503,14 @@ pub mod private_dao_voting {
         proposal.min_balance = min_balance;
         proposal.mxe_program_id = Pubkey::default();
         proposal.quorum = quorum;
+        proposal.threshold_bps = threshold_bps;
+        proposal.privacy_level = privacy_level;
+        proposal.passed = false;
+        proposal.discussion_url = discussion_url;
+        proposal.deposit_amount = 0;
+        proposal.deposit_returned = false;
+        proposal.execution_delay = execution_delay;
+        proposal.executed = false;
         proposal.bump = ctx.bumps.proposal;
 
         emit!(ProposalCreated {
@@ -592,11 +662,29 @@ pub mod private_dao_voting {
             );
         }
 
+        // Check threshold: yes_votes must be >= threshold_bps of non-abstain votes
+        let non_abstain = yes_count
+            .checked_add(no_count)
+            .ok_or(VotingError::ArithmeticOverflow)?;
+        let threshold_met = if non_abstain > 0 {
+            yes_count
+                .checked_mul(10_000)
+                .ok_or(VotingError::ArithmeticOverflow)?
+                / non_abstain
+                >= proposal.threshold_bps as u64
+        } else {
+            false
+        };
+
+        let quorum_met = proposal.quorum == 0 || total_votes >= proposal.quorum;
+
         proposal.is_active = false;
         proposal.is_revealed = true;
         proposal.yes_votes = yes_count;
         proposal.no_votes = no_count;
         proposal.abstain_votes = abstain_count;
+        proposal.passed = quorum_met && threshold_met;
+
         let winner = if yes_count > no_count {
             1u8
         } else if no_count > yes_count {
@@ -614,6 +702,24 @@ pub mod private_dao_voting {
             winner,
         });
 
+        Ok(())
+    }
+
+    /// Initialize DAO configuration (one-time setup)
+    pub fn init_dao_config(
+        ctx: Context<InitDaoConfig>,
+        deposit_mint: Pubkey,
+        proposal_deposit: u64,
+        treasury: Pubkey,
+        slash_if_no_quorum: bool,
+    ) -> Result<()> {
+        let config = &mut ctx.accounts.dao_config;
+        config.authority = ctx.accounts.authority.key();
+        config.deposit_mint = deposit_mint;
+        config.proposal_deposit = proposal_deposit;
+        config.treasury = treasury;
+        config.slash_if_no_quorum = slash_if_no_quorum;
+        config.bump = ctx.bumps.dao_config;
         Ok(())
     }
 }
@@ -967,6 +1073,23 @@ pub struct RevokeDelegation<'info> {
     pub delegation: Account<'info, Delegation>,
 }
 
+#[derive(Accounts)]
+pub struct InitDaoConfig<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + DaoConfig::INIT_SPACE,
+        seeds = [DAO_CONFIG_SEED],
+        bump
+    )]
+    pub dao_config: Account<'info, DaoConfig>,
+
+    pub system_program: Program<'info, System>,
+}
+
 // ==================== STATE ACCOUNTS ====================
 
 #[account]
@@ -976,7 +1099,7 @@ pub struct Proposal {
     pub authority: Pubkey,
     #[max_len(100)]
     pub title: String,
-    #[max_len(500)]
+    #[max_len(5000)]
     pub description: String,
     pub voting_ends_at: i64,
     pub is_active: bool,
@@ -990,6 +1113,47 @@ pub struct Proposal {
     pub abstain_votes: u64,
     /// Minimum number of votes required for the result to be valid (0 = no quorum)
     pub quorum: u64,
+    /// V2: Passing threshold in basis points (e.g., 5001 = simple majority, 6667 = two-thirds)
+    pub threshold_bps: u16,
+    /// V2: Privacy level (0 = Full, 1 = Partial, 2 = Transparent)
+    pub privacy_level: u8,
+    /// V2: Whether the proposal passed its threshold check
+    pub passed: bool,
+    /// V2: Optional discussion URL for linking to external debate forums
+    #[max_len(256)]
+    pub discussion_url: String,
+    /// V2: Deposit amount locked by creator (returned if quorum met)
+    pub deposit_amount: u64,
+    /// V2: Whether the deposit has been returned or slashed
+    pub deposit_returned: bool,
+    /// V2: Execution delay in seconds after reveal (timelock for payload execution)
+    pub execution_delay: i64,
+    /// V2: Whether the on-chain action payload has been executed
+    pub executed: bool,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct DaoConfig {
+    pub authority: Pubkey,
+    /// Token mint used for proposal deposits
+    pub deposit_mint: Pubkey,
+    /// Required deposit amount to create a proposal
+    pub proposal_deposit: u64,
+    /// Treasury address where slashed deposits go
+    pub treasury: Pubkey,
+    /// Whether to slash deposits when quorum is not met
+    pub slash_if_no_quorum: bool,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct ProposalCounter {
+    pub authority: Pubkey,
+    pub active_count: u8,
+    pub last_created_at: i64,
     pub bump: u8,
 }
 
@@ -1094,4 +1258,16 @@ pub enum VotingError {
     ArithmeticOverflow,
     #[msg("Vote tally mismatch: yes + no + abstain != total")]
     VoteTallyMismatch,
+    #[msg("Invalid threshold: must be between 1 and 10000 basis points")]
+    InvalidThreshold,
+    #[msg("Invalid privacy level: must be 0 (Full), 1 (Partial), or 2 (Transparent)")]
+    InvalidPrivacyLevel,
+    #[msg("Invalid execution delay: must be non-negative")]
+    InvalidExecutionDelay,
+    #[msg("Threshold not met: YES votes below required percentage")]
+    ThresholdNotMet,
+    #[msg("Deposit already processed")]
+    DepositAlreadyProcessed,
+    #[msg("Results not yet revealed")]
+    NotYetRevealed,
 }

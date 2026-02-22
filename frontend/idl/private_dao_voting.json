@@ -586,6 +586,22 @@
         {
           "name": "quorum",
           "type": "u64"
+        },
+        {
+          "name": "threshold_bps",
+          "type": "u16"
+        },
+        {
+          "name": "privacy_level",
+          "type": "u8"
+        },
+        {
+          "name": "discussion_url",
+          "type": "string"
+        },
+        {
+          "name": "execution_delay",
+          "type": "i64"
         }
       ]
     },
@@ -1316,6 +1332,46 @@
       "code": 6009,
       "name": "ActiveDelegation",
       "msg": "Cannot vote directly while delegation is active"
+    },
+    {
+      "code": 6010,
+      "name": "ArithmeticOverflow",
+      "msg": "Arithmetic overflow in vote tally"
+    },
+    {
+      "code": 6011,
+      "name": "VoteTallyMismatch",
+      "msg": "Vote tally mismatch: yes + no + abstain != total"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidThreshold",
+      "msg": "Invalid threshold: must be between 1 and 10000 basis points"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidPrivacyLevel",
+      "msg": "Invalid privacy level: must be 0 (Full), 1 (Partial), or 2 (Transparent)"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidExecutionDelay",
+      "msg": "Invalid execution delay: must be non-negative"
+    },
+    {
+      "code": 6015,
+      "name": "ThresholdNotMet",
+      "msg": "Threshold not met: YES votes below required percentage"
+    },
+    {
+      "code": 6016,
+      "name": "DepositAlreadyProcessed",
+      "msg": "Deposit already processed"
+    },
+    {
+      "code": 6017,
+      "name": "NotYetRevealed",
+      "msg": "Results not yet revealed"
     }
   ],
   "types": [
@@ -1438,6 +1494,62 @@
               "Minimum number of votes required for the result to be valid (0 = no quorum)"
             ],
             "type": "u64"
+          },
+          {
+            "name": "threshold_bps",
+            "docs": [
+              "V2: Passing threshold in basis points (e.g., 5001 = simple majority)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "privacy_level",
+            "docs": [
+              "V2: Privacy level (0 = Full, 1 = Partial, 2 = Transparent)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "passed",
+            "docs": [
+              "V2: Whether the proposal passed its threshold check"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "discussion_url",
+            "docs": [
+              "V2: Optional discussion URL"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "deposit_amount",
+            "docs": [
+              "V2: Deposit amount locked by creator"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "deposit_returned",
+            "docs": [
+              "V2: Whether the deposit has been returned or slashed"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "execution_delay",
+            "docs": [
+              "V2: Execution delay in seconds after reveal"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "executed",
+            "docs": [
+              "V2: Whether the payload has been executed"
+            ],
+            "type": "bool"
           },
           {
             "name": "bump",

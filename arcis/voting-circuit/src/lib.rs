@@ -162,6 +162,70 @@ pub fn get_vote_count(state: &VotingState) -> u64 {
     state.encrypted_total_votes.reveal()
 }
 
+/// Get live tally for Transparent Privacy mode.
+///
+/// Unlike `finalize_and_reveal`, this can be called during active voting to show
+/// running totals. Only appropriate for proposals with `privacy_level = 2`
+/// (Transparent Tally). Individual vote choices are still hidden — only the
+/// aggregate counts are revealed.
+///
+/// # Security Note
+/// This function reveals the current vote distribution in real-time.
+/// It should ONLY be invoked for proposals explicitly configured as Transparent.
+/// The on-chain program enforces this check before queuing this computation.
+#[arcis::export]
+pub fn get_live_tally(state: &VotingState) -> (u64, u64, u64, u64) {
+    (
+        state.encrypted_yes_votes.reveal(),
+        state.encrypted_no_votes.reveal(),
+        state.encrypted_abstain_votes.reveal(),
+        state.encrypted_total_votes.reveal(),
+    )
+}
+
+/// Finalize voting with threshold check and conditional payload decryption.
+///
+/// This is the V2 execution engine function. It:
+/// 1. Reveals aggregate tallies (same as `finalize_and_reveal`)
+/// 2. Checks if quorum and threshold are met
+/// 3. Returns a `passed` boolean derived from the now-public tallies
+///
+/// The `passed` boolean is safe to branch on because the tallies are already
+/// being revealed — it's derived from public values, not encrypted state.
+///
+/// # Arguments
+/// * `state` - Current encrypted voting state
+/// * `quorum` - Minimum total votes required (plaintext, set at proposal creation)
+/// * `threshold_bps` - Required YES percentage in basis points (e.g., 5001 = 50.01%)
+///
+/// # Returns
+/// Tuple of `(yes, no, abstain, total, passed)` where `passed` indicates
+/// whether the proposal met both quorum and threshold requirements.
+#[arcis::export]
+pub fn finalize_with_threshold(
+    state: VotingState,
+    quorum: u64,
+    threshold_bps: u64,
+) -> (u64, u64, u64, u64, bool) {
+    let yes_votes = state.encrypted_yes_votes.reveal();
+    let no_votes = state.encrypted_no_votes.reveal();
+    let abstain_votes = state.encrypted_abstain_votes.reveal();
+    let total_votes = state.encrypted_total_votes.reveal();
+
+    let quorum_met = quorum == 0 || total_votes >= quorum;
+    let non_abstain = yes_votes + no_votes;
+    let threshold_met =
+        non_abstain > 0 && (yes_votes * 10_000) / non_abstain >= threshold_bps;
+
+    (
+        yes_votes,
+        no_votes,
+        abstain_votes,
+        total_votes,
+        quorum_met && threshold_met,
+    )
+}
+
 // ==================== TESTS ====================
 
 #[cfg(test)]
@@ -312,6 +376,116 @@ mod tests {
 
         let count = get_vote_count(&state);
         assert_eq!(count, 5);
+    }
+
+    #[test]
+    fn test_get_live_tally() {
+        let ctx = TestContext::new();
+        let mut state = initialize_voting(ctx.computation_id());
+
+        // Cast some votes
+        state = cast_vote(state, Enc::new(1u8)); // YES
+        state = cast_vote(state, Enc::new(1u8)); // YES
+        state = cast_vote(state, Enc::new(0u8)); // NO
+
+        // Live tally reveals running totals
+        let (yes, no, abstain, total) = get_live_tally(&state);
+        assert_eq!(yes, 2);
+        assert_eq!(no, 1);
+        assert_eq!(abstain, 0);
+        assert_eq!(total, 3);
+
+        // Cast more votes and check again
+        state = cast_vote(state, Enc::new(2u8)); // ABSTAIN
+        let (yes, no, abstain, total) = get_live_tally(&state);
+        assert_eq!(yes, 2);
+        assert_eq!(no, 1);
+        assert_eq!(abstain, 1);
+        assert_eq!(total, 4);
+    }
+
+    #[test]
+    fn test_finalize_with_threshold_passes() {
+        let ctx = TestContext::new();
+        let mut state = initialize_voting(ctx.computation_id());
+
+        // 7 YES, 3 NO = 70% YES
+        for _ in 0..7 {
+            state = cast_vote(state, Enc::new(1u8));
+        }
+        for _ in 0..3 {
+            state = cast_vote(state, Enc::new(0u8));
+        }
+
+        // Quorum = 5, threshold = 60% (6000 bps)
+        let (yes, no, abstain, total, passed) = finalize_with_threshold(state, 5, 6000);
+        assert_eq!(yes, 7);
+        assert_eq!(no, 3);
+        assert_eq!(abstain, 0);
+        assert_eq!(total, 10);
+        assert!(passed);
+    }
+
+    #[test]
+    fn test_finalize_with_threshold_fails_quorum() {
+        let ctx = TestContext::new();
+        let mut state = initialize_voting(ctx.computation_id());
+
+        // Only 3 votes, all YES
+        for _ in 0..3 {
+            state = cast_vote(state, Enc::new(1u8));
+        }
+
+        // Quorum = 5 (not met), threshold = 50%
+        let (_, _, _, total, passed) = finalize_with_threshold(state, 5, 5001);
+        assert_eq!(total, 3);
+        assert!(!passed);
+    }
+
+    #[test]
+    fn test_finalize_with_threshold_fails_threshold() {
+        let ctx = TestContext::new();
+        let mut state = initialize_voting(ctx.computation_id());
+
+        // 4 YES, 6 NO = 40% YES
+        for _ in 0..4 {
+            state = cast_vote(state, Enc::new(1u8));
+        }
+        for _ in 0..6 {
+            state = cast_vote(state, Enc::new(0u8));
+        }
+
+        // Quorum = 5 (met), threshold = 50% (not met)
+        let (yes, no, _, total, passed) = finalize_with_threshold(state, 5, 5001);
+        assert_eq!(yes, 4);
+        assert_eq!(no, 6);
+        assert_eq!(total, 10);
+        assert!(!passed);
+    }
+
+    #[test]
+    fn test_finalize_abstains_excluded_from_threshold() {
+        let ctx = TestContext::new();
+        let mut state = initialize_voting(ctx.computation_id());
+
+        // 3 YES, 2 NO, 5 ABSTAIN = 60% of non-abstain
+        for _ in 0..3 {
+            state = cast_vote(state, Enc::new(1u8));
+        }
+        for _ in 0..2 {
+            state = cast_vote(state, Enc::new(0u8));
+        }
+        for _ in 0..5 {
+            state = cast_vote(state, Enc::new(2u8));
+        }
+
+        // Threshold = 60% of non-abstain (3/5 = 60%, exactly meets 6000 bps)
+        let (yes, no, abstain, total, passed) = finalize_with_threshold(state, 0, 6000);
+        assert_eq!(yes, 3);
+        assert_eq!(no, 2);
+        assert_eq!(abstain, 5);
+        assert_eq!(total, 10);
+        assert!(passed);
     }
 
     #[test]

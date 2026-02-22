@@ -110,6 +110,13 @@ export default function ProposalDetail() {
         noVotes: a.noVotes ?? a.no_votes ?? 0,
         abstainVotes: a.abstainVotes ?? a.abstain_votes ?? 0,
         quorum: a.quorum ?? 0,
+        thresholdBps: a.thresholdBps ?? a.threshold_bps ?? 5001,
+        privacyLevel: a.privacyLevel ?? a.privacy_level ?? 0,
+        passed: a.passed ?? false,
+        discussionUrl: a.discussionUrl ?? a.discussion_url ?? "",
+        depositAmount: a.depositAmount ?? a.deposit_amount ?? 0,
+        executionDelay: a.executionDelay ?? a.execution_delay ?? 0,
+        executed: a.executed ?? false,
       };
       setProposal(p);
 
@@ -298,11 +305,13 @@ export default function ProposalDetail() {
               isRevealing={revealing}
               isClaiming={claiming}
               isEncrypting={isEncrypting}
+              currentVoteStep="idle"
               onSelectChoice={setSelected}
               onVote={() => vote(proposal, selected!)}
               onReveal={() => reveal(proposal)}
               onClaimTokens={() => claimTokens(proposal)}
               onToggleHide={() => {}}
+              onVoteStepComplete={() => {}}
             />
 
             {/* On-chain details */}
