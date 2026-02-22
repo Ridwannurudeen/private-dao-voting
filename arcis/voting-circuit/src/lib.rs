@@ -217,4 +217,121 @@ mod tests {
         assert_eq!(abstain, 0);
         assert_eq!(total, 0);
     }
+
+    #[test]
+    fn test_single_yes_vote() {
+        let ctx = TestContext::new();
+        let mut state = initialize_voting(ctx.computation_id());
+        state = cast_vote(state, Enc::new(1u8));
+
+        let (yes, no, abstain, total) = finalize_and_reveal(state);
+        assert_eq!(yes, 1);
+        assert_eq!(no, 0);
+        assert_eq!(abstain, 0);
+        assert_eq!(total, 1);
+    }
+
+    #[test]
+    fn test_single_no_vote() {
+        let ctx = TestContext::new();
+        let mut state = initialize_voting(ctx.computation_id());
+        state = cast_vote(state, Enc::new(0u8));
+
+        let (yes, no, abstain, total) = finalize_and_reveal(state);
+        assert_eq!(yes, 0);
+        assert_eq!(no, 1);
+        assert_eq!(abstain, 0);
+        assert_eq!(total, 1);
+    }
+
+    #[test]
+    fn test_all_yes() {
+        let ctx = TestContext::new();
+        let mut state = initialize_voting(ctx.computation_id());
+
+        for _ in 0..10 {
+            state = cast_vote(state, Enc::new(1u8));
+        }
+
+        let (yes, no, abstain, total) = finalize_and_reveal(state);
+        assert_eq!(yes, 10);
+        assert_eq!(no, 0);
+        assert_eq!(abstain, 0);
+        assert_eq!(total, 10);
+    }
+
+    #[test]
+    fn test_all_no() {
+        let ctx = TestContext::new();
+        let mut state = initialize_voting(ctx.computation_id());
+
+        for _ in 0..7 {
+            state = cast_vote(state, Enc::new(0u8));
+        }
+
+        let (yes, no, abstain, total) = finalize_and_reveal(state);
+        assert_eq!(yes, 0);
+        assert_eq!(no, 7);
+        assert_eq!(abstain, 0);
+        assert_eq!(total, 7);
+    }
+
+    #[test]
+    fn test_large_vote_count() {
+        let ctx = TestContext::new();
+        let mut state = initialize_voting(ctx.computation_id());
+
+        // Simulate 100 voters: 50 YES, 30 NO, 20 ABSTAIN
+        for _ in 0..50 {
+            state = cast_vote(state, Enc::new(1u8));
+        }
+        for _ in 0..30 {
+            state = cast_vote(state, Enc::new(0u8));
+        }
+        for _ in 0..20 {
+            state = cast_vote(state, Enc::new(2u8));
+        }
+
+        let (yes, no, abstain, total) = finalize_and_reveal(state);
+        assert_eq!(yes, 50);
+        assert_eq!(no, 30);
+        assert_eq!(abstain, 20);
+        assert_eq!(total, 100);
+    }
+
+    #[test]
+    fn test_vote_count_query() {
+        let ctx = TestContext::new();
+        let mut state = initialize_voting(ctx.computation_id());
+
+        // Cast some votes and check count without revealing breakdown
+        for _ in 0..4 {
+            state = cast_vote(state, Enc::new(1u8));
+        }
+        state = cast_vote(state, Enc::new(0u8));
+
+        let count = get_vote_count(&state);
+        assert_eq!(count, 5);
+    }
+
+    #[test]
+    fn test_tally_consistency() {
+        let ctx = TestContext::new();
+        let mut state = initialize_voting(ctx.computation_id());
+
+        // Mixed votes
+        state = cast_vote(state, Enc::new(1u8)); // YES
+        state = cast_vote(state, Enc::new(0u8)); // NO
+        state = cast_vote(state, Enc::new(2u8)); // ABSTAIN
+        state = cast_vote(state, Enc::new(1u8)); // YES
+        state = cast_vote(state, Enc::new(0u8)); // NO
+
+        let (yes, no, abstain, total) = finalize_and_reveal(state);
+
+        // Verify total == yes + no + abstain (integrity invariant)
+        assert_eq!(yes + no + abstain, total);
+        assert_eq!(yes, 2);
+        assert_eq!(no, 2);
+        assert_eq!(abstain, 1);
+    }
 }
