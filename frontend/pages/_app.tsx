@@ -15,10 +15,7 @@ export default function App({ Component, pageProps }: AppProps) {
     <ErrorBoundary>
       <Head>
         <title>Private DAO Voting | Confidential Governance on Solana</title>
-        <meta name="description" content="Token-gated private voting on Solana powered by Arcium MXE. Votes are encrypted end-to-end via multi-party computation — individual choices are never revealed." />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="manifest" href="/manifest.json" />
 
         {/* Open Graph */}
         <meta property="og:type" content="website" />
@@ -31,9 +28,6 @@ export default function App({ Component, pageProps }: AppProps) {
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Private DAO Voting" />
         <meta name="twitter:description" content="Encrypted governance on Solana. Votes tallied via Arcium MPC — no one sees how you voted." />
-
-        {/* Theme */}
-        <meta name="theme-color" content="#0a0a1a" />
       </Head>
       <WalletProviderWrapper>
         <Component {...pageProps} />

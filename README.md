@@ -19,13 +19,22 @@ Votes are encrypted client-side, tallied inside Arcium's MXE without ever being 
 > **Try it live:** [privatedao-arcium.vercel.app](https://privatedao-arcium.vercel.app/) — Connect a Solana devnet wallet to create proposals and cast encrypted votes.
 
 **Key UI features:**
-- Real-time countdown timers with urgency indicators
+- Animated encryption visualization — hex particles flow into a lock during vote encryption
+- Confetti celebration on successful vote submission
+- Real-time countdown timers with urgency pulse (< 5 min remaining)
 - Shimmer-animated encrypted vote vault showing sealed votes
 - Privacy integrity progress bar during vote encryption
-- Live activity feed showing on-chain events
+- Interactive "How It Works" 5-step guided walkthrough
+- Dark/light theme toggle with localStorage persistence
+- Keyboard shortcuts (`N` new, `R` refresh, `Esc` close)
+- Live on-chain activity feed
 - Participation stats dashboard
 - Shareable proposal links (`/proposal/[id]`)
+- Export results as CSV/JSON
+- Solana Explorer links in toast notifications
+- User-friendly error messages for Anchor errors
 - Mobile-responsive design
+- PWA-installable (manifest.json)
 
 ---
 
@@ -138,20 +147,44 @@ private-dao-voting/
 │   └── src/lib.rs                 #   VotingState, cast_vote, finalize_and_reveal
 ├── programs/private-dao-voting/   # Anchor/Solana program (Rust)
 │   └── src/lib.rs                 #   On-chain logic, token gating, delegation, quorum
-├── frontend/                      # Next.js + Tailwind UI
-│   ├── pages/index.tsx            #   Main voting interface
+├── tests/                         # Anchor integration tests
+│   └── private-dao-voting.test.ts #   Lifecycle, voting, quorum, delegation, access control
+├── frontend/
+│   ├── pages/
+│   │   ├── index.tsx              #   Main voting interface
+│   │   ├── proposal/[id].tsx      #   Shareable proposal detail page
+│   │   ├── _app.tsx               #   OG meta, PWA manifest, theme
+│   │   └── api/faucet.ts          #   Rate-limited dev token faucet
 │   ├── components/
-│   │   ├── ProposalCard.tsx       #   Proposal display, voting UI, quorum status
+│   │   ├── ProposalCard.tsx       #   Proposal display, voting, countdown, export
 │   │   ├── CreateModal.tsx        #   Proposal creation form
+│   │   ├── EncryptionAnimation.tsx #  Particle animation during vote encryption
+│   │   ├── Confetti.tsx           #   Celebration effect on successful vote
+│   │   ├── HowItWorks.tsx         #   Interactive 5-step walkthrough
+│   │   ├── ThemeToggle.tsx        #   Dark/light mode toggle
+│   │   ├── StatsBar.tsx           #   Participation stats dashboard
+│   │   ├── ActivityFeed.tsx       #   On-chain event feed
+│   │   ├── ExportResults.tsx      #   CSV/JSON result export
 │   │   ├── PrivacyProtocol.tsx    #   Privacy tech explainer
+│   │   ├── SkeletonCard.tsx       #   Shimmer loading placeholder
+│   │   ├── Modal.tsx              #   Accessible modal with focus trap
+│   │   ├── Toast.tsx              #   Notifications with Explorer links
 │   │   ├── ErrorBoundary.tsx      #   Crash recovery wrapper
-│   │   ├── Modal.tsx              #   Reusable modal
-│   │   ├── Toast.tsx              #   Notification system
 │   │   └── Icons.tsx              #   SVG icon components
-│   ├── lib/arcium.ts              #   Arcium client (encryption, MXE integration)
-│   ├── lib/contract.ts            #   Solana program helpers (PDAs, delegation)
-│   └── pages/api/faucet.ts        #   Dev token faucet
-└── scripts/                       # Devnet setup and testing
+│   ├── hooks/
+│   │   └── useKeyboardShortcuts.ts #  Keyboard shortcut handler
+│   ├── lib/
+│   │   ├── arcium.ts              #   Arcium client (encryption, MXE integration)
+│   │   ├── contract.ts            #   Solana program helpers (PDAs, delegation)
+│   │   └── errors.ts              #   Error parsing + Explorer URL helper
+│   ├── e2e/
+│   │   └── voting-flow.spec.ts    #   Playwright E2E tests
+│   └── public/
+│       ├── favicon.svg            #   Custom shield+lock SVG favicon
+│       └── manifest.json          #   PWA manifest
+├── scripts/                       # Devnet setup and testing
+├── CONTRIBUTING.md                # Development workflow + security guidelines
+└── .github/workflows/ci.yml      # CI pipeline
 ```
 
 ### Component Interaction
@@ -247,6 +280,18 @@ flowchart TB
 
 ---
 
+## UX & Accessibility
+
+- **Dark/light theme** — Toggle in header, persisted across sessions
+- **Keyboard navigation** — `N` new proposal, `R` refresh, `Esc` close modals; on-screen hints on desktop
+- **Focus management** — Modals trap focus and restore it on close
+- **ARIA attributes** — `aria-label`, `aria-pressed`, `aria-modal`, `role="dialog"`, `role="region"` on all interactive elements
+- **Semantic HTML** — `<article>`, `<header>`, `<main>`, `<footer>` landmarks
+- **PWA-installable** — Add to home screen on mobile/desktop via Web App Manifest
+- **Responsive design** — Optimized for mobile, tablet, and desktop viewports
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -287,22 +332,27 @@ npm run dev
 
 ```bash
 # Anchor integration tests (requires local validator or devnet)
-# Tests: proposal lifecycle, voting, quorum enforcement,
-# delegation, token gating, double-vote prevention, access control
 anchor test
-
-# Or run against devnet directly
+# Or against devnet directly
 anchor test --skip-local-validator
+
+# Playwright E2E tests (frontend)
+cd frontend
+npx playwright install --with-deps chromium
+npx playwright test
+
+# Arcis circuit unit tests
+cd arcis/voting-circuit
+cargo test
 ```
 
-**Test coverage includes:**
-- Proposal creation and tally initialization
-- Encrypted vote casting with token gating
-- Double-vote prevention (PDA uniqueness)
-- Quorum enforcement (reject reveal when not met)
-- Authority-only reveal with result verification
-- Vote delegation and revocation
-- Non-authority access control
+**Test coverage:**
+
+| Layer | Framework | What's tested |
+|-------|-----------|---------------|
+| **Anchor** | Mocha/Chai | Proposal lifecycle, vote casting, token gating, double-vote prevention, quorum enforcement, delegation, access control |
+| **E2E** | Playwright | Landing page, How It Works stepper, meta tags, PWA manifest, theme toggle, proposal detail |
+| **Circuit** | Rust `#[test]` | Voting flow, all-abstain, empty voting edge case |
 
 ---
 
@@ -340,8 +390,10 @@ Token holders can delegate their voting power to a trusted representative via an
 | Arcium client | @arcium-hq/client | 0.7.0 |
 | Frontend | Next.js + React | 14.0.4 |
 | Styling | Tailwind CSS | 3.4.0 |
+| E2E testing | Playwright | latest |
 | Wallet | Solana Wallet Adapter | latest |
 | Token standard | SPL Token | 0.4.x |
+| PWA | Web App Manifest | W3C |
 
 ---
 
