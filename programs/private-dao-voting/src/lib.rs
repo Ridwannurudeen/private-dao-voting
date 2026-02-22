@@ -343,7 +343,7 @@ pub mod private_dao_voting {
     }
 
     /// Callback from Arcium with revealed results
-    /// Only callable by the Arcium program via CPI (validated by signer constraint)
+    /// Only callable by the Arcium program via CPI (validated by sign PDA signer constraint)
     pub fn reveal_results_callback(
         ctx: Context<RevealResultsCallback>,
         yes_count: u64,
@@ -352,6 +352,25 @@ pub mod private_dao_voting {
         total_votes: u64,
     ) -> Result<()> {
         let proposal = &mut ctx.accounts.proposal;
+
+        // Validate vote count consistency
+        let computed_total = yes_count
+            .checked_add(no_count)
+            .and_then(|x| x.checked_add(abstain_count))
+            .ok_or(VotingError::ArithmeticOverflow)?;
+        require!(
+            computed_total == total_votes,
+            VotingError::VoteTallyMismatch
+        );
+
+        // Enforce quorum if set
+        if proposal.quorum > 0 {
+            require!(
+                total_votes >= proposal.quorum,
+                VotingError::QuorumNotReached
+            );
+        }
+
         proposal.is_active = false;
         proposal.is_revealed = true;
         proposal.yes_votes = yes_count;
@@ -487,6 +506,18 @@ pub mod private_dao_voting {
             VotingError::VotingEnded
         );
 
+        // Check no active delegation — delegators must revoke before voting directly
+        let (delegation_pda, _) = Pubkey::find_program_address(
+            &[DELEGATION_SEED, ctx.accounts.voter.key().as_ref()],
+            ctx.program_id,
+        );
+        let delegation_info = ctx.remaining_accounts.iter().find(|a| a.key() == delegation_pda);
+        if let Some(acct) = delegation_info {
+            if acct.data_len() > 0 && acct.owner == ctx.program_id {
+                return Err(VotingError::ActiveDelegation.into());
+            }
+        }
+
         // Token gate: voter must hold the required SPL token
         let token_account = &ctx.accounts.voter_token_account;
         require!(
@@ -544,8 +575,13 @@ pub mod private_dao_voting {
             VotingError::VotingNotEnded
         );
 
+        // Checked arithmetic to prevent overflow
+        let total_votes = yes_count
+            .checked_add(no_count)
+            .and_then(|x| x.checked_add(abstain_count))
+            .ok_or(VotingError::ArithmeticOverflow)?;
+
         // Check quorum if set
-        let total_votes = yes_count + no_count + abstain_count;
         if proposal.quorum > 0 {
             require!(
                 total_votes >= proposal.quorum,
@@ -1051,4 +1087,8 @@ pub enum VotingError {
     QuorumNotReached,
     #[msg("Cannot vote directly while delegation is active")]
     ActiveDelegation,
+    #[msg("Arithmetic overflow in vote tally")]
+    ArithmeticOverflow,
+    #[msg("Vote tally mismatch: yes + no + abstain != total")]
+    VoteTallyMismatch,
 }

@@ -133,16 +133,19 @@ export default function Home() {
   // Check token balances for all proposals
   const checkTokenBalances = useCallback(async (proposalList: Proposal[]) => {
     if (!publicKey) return;
+    const results = await Promise.all(
+      proposalList.map(async (p) => {
+        try {
+          const ata = getAssociatedTokenAddressSync(p.gateMint, publicKey);
+          const info = await connection.getTokenAccountBalance(ata);
+          return { key: p.publicKey.toString(), balance: Number(info.value.amount) };
+        } catch {
+          return { key: p.publicKey.toString(), balance: 0 };
+        }
+      })
+    );
     const balances: Record<string, number> = {};
-    for (const p of proposalList) {
-      try {
-        const ata = getAssociatedTokenAddressSync(p.gateMint, publicKey);
-        const info = await connection.getTokenAccountBalance(ata);
-        balances[p.publicKey.toString()] = Number(info.value.amount);
-      } catch {
-        balances[p.publicKey.toString()] = 0;
-      }
-    }
+    for (const r of results) balances[r.key] = r.balance;
     setTokenBalances(balances);
   }, [publicKey, connection]);
 
@@ -392,6 +395,7 @@ export default function Home() {
     setRevealing((r) => ({ ...r, [key]: false }));
   };
 
+  const handleConfettiDone = useCallback(() => setShowConfetti(false), []);
   const visibleProposals = proposals.filter((p) => !hiddenProposals.has(p.publicKey.toString()));
 
   // Keyboard shortcuts
@@ -654,7 +658,7 @@ export default function Home() {
 
       <CreateModal isOpen={modal} onClose={() => setModal(false)} onSubmit={create} loading={creating} />
       {toast && <Toast message={toast.message} type={toast.type} txUrl={toast.txUrl} onClose={() => setToast(null)} />}
-      <Confetti active={showConfetti} onDone={() => setShowConfetti(false)} />
+      <Confetti active={showConfetti} onDone={handleConfettiDone} />
       <HowItWorks />
 
       {/* Keyboard shortcuts hint */}

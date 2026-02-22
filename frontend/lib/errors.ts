@@ -6,6 +6,8 @@ const ERROR_MAP: Record<string, string> = {
   NotAuthority: "Only the proposal authority can perform this action.",
   AlreadyRevealed: "Results have already been revealed for this proposal.",
   InsufficientBalance: "You don't have enough gate tokens to vote on this proposal.",
+  ArithmeticOverflow: "Vote tally arithmetic overflow. Please contact the DAO administrator.",
+  VoteTallyMismatch: "Vote tally mismatch detected. The sum of votes doesn't match the total.",
 };
 
 export function parseAnchorError(error: any): string {
