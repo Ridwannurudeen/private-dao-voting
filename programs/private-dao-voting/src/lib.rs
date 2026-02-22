@@ -511,7 +511,10 @@ pub mod private_dao_voting {
             &[DELEGATION_SEED, ctx.accounts.voter.key().as_ref()],
             ctx.program_id,
         );
-        let delegation_info = ctx.remaining_accounts.iter().find(|a| a.key() == delegation_pda);
+        let delegation_info = ctx
+            .remaining_accounts
+            .iter()
+            .find(|a| a.key() == delegation_pda);
         if let Some(acct) = delegation_info {
             if acct.data_len() > 0 && acct.owner == ctx.program_id {
                 return Err(VotingError::ActiveDelegation.into());
