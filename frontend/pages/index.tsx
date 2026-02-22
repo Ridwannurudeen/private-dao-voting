@@ -29,6 +29,7 @@ import {
   ArciumStatusEvent,
   deriveComputationOffset,
 } from "../lib/arcium";
+import { parseAnchorError, explorerTxUrl } from "../lib/errors";
 import { LockIcon, ShieldCheckIcon } from "../components/Icons";
 import { Toast, ToastData } from "../components/Toast";
 import { CreateModal } from "../components/CreateModal";
@@ -225,9 +226,17 @@ export default function Home() {
     setClaiming((c) => ({ ...c, [key]: false }));
   };
 
-  // Auto-load when wallet connects
+  // Auto-load when wallet connects, clear state on disconnect
   useEffect(() => {
-    if (connected && anchorWallet) load();
+    if (connected && anchorWallet) {
+      load();
+    } else {
+      setProposals([]);
+      setVoted({});
+      setSelected({});
+      setTokenBalances({});
+      setDelegation(null);
+    }
   }, [connected, anchorWallet, load]);
 
   // Check delegation status
@@ -244,12 +253,12 @@ export default function Home() {
     setDelegating(true);
     try {
       const delegate = new PublicKey(delegateInput.trim());
-      await delegateVote(program, publicKey, delegate);
+      const txSig = await delegateVote(program, publicKey, delegate);
       setDelegation({ delegate, createdAt: Math.floor(Date.now() / 1000) });
       setDelegateInput("");
-      setToast({ message: "Vote delegation active!", type: "success" });
+      setToast({ message: "Vote delegation active!", type: "success", txUrl: explorerTxUrl(txSig) });
     } catch (e: any) {
-      setToast({ message: e.message || "Delegation failed", type: "error" });
+      setToast({ message: parseAnchorError(e), type: "error" });
     }
     setDelegating(false);
   };
@@ -259,11 +268,11 @@ export default function Home() {
     if (!program || !publicKey) return;
     setDelegating(true);
     try {
-      await revokeDelegation(program, publicKey);
+      const txSig = await revokeDelegation(program, publicKey);
       setDelegation(null);
-      setToast({ message: "Delegation revoked", type: "success" });
+      setToast({ message: "Delegation revoked", type: "success", txUrl: explorerTxUrl(txSig) });
     } catch (e: any) {
-      setToast({ message: e.message || "Revoke failed", type: "error" });
+      setToast({ message: parseAnchorError(e), type: "error" });
     }
     setDelegating(false);
   };
@@ -277,14 +286,14 @@ export default function Home() {
       const gateMint = new PublicKey(gateMintStr);
       const minBalance = new BN(minBalanceStr);
       const quorum = new BN(quorumStr || "0");
-      const { proposalPDA } = await devCreateProposal(program, publicKey, title, desc, duration, gateMint, minBalance, quorum);
-      await devInitTally(program, publicKey, proposalPDA);
-      setToast({ message: "Proposal created with tally initialized!", type: "success" });
+      const result = await devCreateProposal(program, publicKey, title, desc, duration, gateMint, minBalance, quorum);
+      await devInitTally(program, publicKey, result.proposalPDA);
+      setToast({ message: "Proposal created with tally initialized!", type: "success", txUrl: explorerTxUrl(result.tx) });
       setModal(false);
       load();
     } catch (e: any) {
       console.error("Create failed:", e);
-      setToast({ message: e.message || "Failed to create proposal", type: "error" });
+      setToast({ message: parseAnchorError(e), type: "error" });
     }
     setCreating(false);
   };
@@ -312,15 +321,16 @@ export default function Home() {
       const secretInput = client.toSecretInput(encryptedVote, publicKey);
       setIsEncrypting(false);
 
+      let txSig: string;
       if (DEVELOPMENT_MODE) {
-        await devCastVote(
+        txSig = await devCastVote(
           program, publicKey, proposal.publicKey, proposal.gateMint,
           secretInput.encryptedChoice, secretInput.nonce, secretInput.voterPubkey
         );
       } else {
         const computationOffset = deriveComputationOffset(proposal.publicKey, Date.now());
         const arciumAccounts = client.getArciumAccounts("vote", computationOffset);
-        await castVoteWithArcium(
+        txSig = await castVoteWithArcium(
           program, publicKey, proposal.publicKey, proposal.gateMint,
           secretInput.encryptedChoice, secretInput.nonce, secretInput.voterPubkey,
           arciumAccounts
@@ -344,14 +354,14 @@ export default function Home() {
         });
       }
 
-      setToast({ message: "Encrypted vote recorded on-chain!", type: "success" });
+      setToast({ message: "Encrypted vote recorded on-chain!", type: "success", txUrl: explorerTxUrl(txSig) });
       setVoted((v) => ({ ...v, [key]: true }));
       setSelected((s) => ({ ...s, [key]: null }));
       load();
     } catch (e: any) {
       console.error("Vote error:", e);
       setIsEncrypting(false);
-      setToast({ message: e.message || "Vote failed", type: "error" });
+      setToast({ message: parseAnchorError(e), type: "error" });
     }
     setVoting((v) => ({ ...v, [key]: false }));
   };
@@ -366,12 +376,12 @@ export default function Home() {
 
     try {
       const tally = devTallies[key] || { yes: 0, no: 0, abstain: 0 };
-      await devRevealResults(program, publicKey, proposal.publicKey, tally.yes, tally.no, tally.abstain);
-      setToast({ message: "Results revealed!", type: "success" });
+      const txSig = await devRevealResults(program, publicKey, proposal.publicKey, tally.yes, tally.no, tally.abstain);
+      setToast({ message: "Results revealed!", type: "success", txUrl: explorerTxUrl(txSig) });
       load();
     } catch (e: any) {
       console.error("Reveal error:", e);
-      setToast({ message: e.message || "Reveal failed", type: "error" });
+      setToast({ message: parseAnchorError(e), type: "error" });
     }
     setRevealing((r) => ({ ...r, [key]: false }));
   };
@@ -628,7 +638,7 @@ export default function Home() {
       </footer>
 
       <CreateModal isOpen={modal} onClose={() => setModal(false)} onSubmit={create} loading={creating} />
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {toast && <Toast message={toast.message} type={toast.type} txUrl={toast.txUrl} onClose={() => setToast(null)} />}
     </div>
   );
 }

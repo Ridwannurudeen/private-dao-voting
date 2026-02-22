@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
+import Head from "next/head";
 import { useWallet, useConnection, useAnchorWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { AnchorProvider, Program, BN, Idl } from "@coral-xyz/anchor";
@@ -231,8 +232,11 @@ export default function ProposalDetail() {
   };
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-white/10 sticky top-0 bg-slate-900/90 backdrop-blur-xl z-40">
+    <div className="min-h-screen bg-mesh">
+      <Head>
+        <title>{proposal ? `${proposal.title} | Private DAO Voting` : "Proposal | Private DAO Voting"}</title>
+      </Head>
+      <header className="sticky top-0 z-40 backdrop-blur-xl" style={{ background: 'rgba(10, 10, 26, 0.85)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="max-w-3xl mx-auto flex justify-between items-center p-4">
           <div className="flex items-center gap-3">
             <Link href="/" className="text-gray-400 hover:text-white transition-colors">
