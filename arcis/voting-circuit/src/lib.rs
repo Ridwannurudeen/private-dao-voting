@@ -1,241 +1,244 @@
 //! # Private DAO Voting — Arcis MPC Circuit
 //!
-//! This circuit runs inside Arcium's MXE (Multi-Party Computation eXecution Environment).
-//! It defines the core privacy logic: how encrypted votes are tallied without
-//! ever being decrypted individually.
+//! This circuit runs inside Arcium's MXE (Multi-Party Computation eXecution Environment)
+//! using the Cerberus protocol for **dishonest majority** security: the computation
+//! remains correct and private as long as at least one Arx Node is honest.
+//!
+//! ## Architecture
+//!
+//! - **Individual votes** use `Enc<Shared, u8>` — client-encrypted via x25519 ECDH,
+//!   giving the voter cryptographic control over their key material.
+//! - **Cumulative tally** uses `Enc<Mxe, Tally>` — owned by the MXE cluster,
+//!   decryptable only via distributed threshold decryption across Arx Nodes.
+//!   No single node holds enough key shares to read the tally.
 //!
 //! ## Privacy Guarantees
 //!
-//! - **Input Privacy**: Individual votes (`Enc<Shared, u8>`) are secret-shared
-//!   across MXE nodes. No single node can reconstruct any vote.
-//! - **Computation Integrity**: The MXE produces correctness proofs that the
-//!   published tally is the mathematically valid sum of all submitted votes.
-//! - **Output Privacy**: Only `finalize_and_reveal` calls `.reveal()`, and only
-//!   on aggregate totals — never on individual vote values.
+//! - **Input Privacy**: Individual votes are secret-shared across MXE nodes.
+//! - **Computation Integrity**: Cerberus MAC-authenticated shares detect tampering.
+//! - **Output Privacy**: Only `finalize_and_reveal` / `finalize_with_threshold`
+//!   call `.reveal()`, and only on aggregate totals.
 //!
 //! ## Vote Encoding
 //!
-//! Votes are encoded as a single `u8`:
 //! - `0` = NO
 //! - `1` = YES
 //! - `2` = ABSTAIN
 //!
 //! ## Why Encrypted Comparisons (not branches)
 //!
-//! In MPC, you cannot branch on secret values — `if encrypted_vote == 1` would
-//! leak the vote to the evaluating node. Instead, we use constant-time encrypted
-//! comparisons (`eq()`) that produce encrypted boolean flags, then cast those to
-//! `u64` for accumulation. This is the standard MPC pattern for conditional logic.
+//! In MPC, branching on secret values leaks information via control flow.
+//! Instead we use constant-time encrypted comparisons (`eq()`) that produce
+//! encrypted boolean flags, then `cast()` to `u64` for accumulation.
 
-use arcis::prelude::*;
+/// Embeds the SHA-256 hash of the compiled circuit bytecode at compile time.
+/// Used by the on-chain program to verify MPC logic integrity — if any node
+/// attempts to run a modified circuit, the hash mismatch will be detected.
+#[cfg(not(test))]
+pub const CIRCUIT_HASH: &str = circuit_hash!("voting-circuit");
 
-/// Encrypted voting state stored in the MXE cluster.
+#[cfg(test)]
+pub const CIRCUIT_HASH: &str = "test-mode-no-hash";
+
+/// The core encrypted voting module. All functions marked `#[instruction]`
+/// are compiled into individual MPC circuits callable from Solana via CPI.
 ///
-/// All fields are `Enc<Shared, u64>` — encrypted values that are secret-shared
-/// across Arx Nodes. No individual node holds enough shares to decrypt any field.
-/// The only way to access plaintext is via `finalize_and_reveal`, which requires
-/// consensus from a threshold of nodes.
-#[derive(Debug, Clone)]
-pub struct VotingState {
-    /// Encrypted count of YES votes — incremented by 1 for each YES ballot
-    pub encrypted_yes_votes: Enc<Shared, u64>,
-    /// Encrypted count of NO votes — incremented by 1 for each NO ballot
-    pub encrypted_no_votes: Enc<Shared, u64>,
-    /// Encrypted count of ABSTAIN votes — incremented by 1 for each ABSTAIN ballot
-    pub encrypted_abstain_votes: Enc<Shared, u64>,
-    /// Encrypted total votes cast — always incremented by 1 per vote (integrity check)
-    pub encrypted_total_votes: Enc<Shared, u64>,
-}
-
-/// Initialize a new voting session with encrypted zero counts.
+/// ## Computation Lifecycle
 ///
-/// This creates a fresh `VotingState` where all counters are encrypted zeros.
-/// The MXE stores this state and provides it to subsequent `cast_vote` calls.
-///
-/// # Security
-/// Even the initial "zero" values are encrypted — an observer cannot distinguish
-/// a fresh state from one with votes, without calling `finalize_and_reveal`.
-#[arcis::export]
-pub fn initialize_voting(computation_id: ComputationId) -> VotingState {
-    let zero_u64: Enc<Shared, u64> = Enc::new(0u64);
+/// 1. `init_comp_def` — Registers circuit bytecode + hash on-chain (one-time)
+/// 2. `initialize_voting` — Creates encrypted zero state in MXE
+/// 3. `cast_vote` (repeated) — Accumulates encrypted votes into tally
+/// 4. `finalize_and_reveal` / `finalize_with_threshold` — Threshold decryption
+/// 5. Callback delivers plaintext aggregates to the Solana program
+#[encrypted]
+mod circuits {
+    use arcis_imports::*;
 
-    VotingState {
-        encrypted_yes_votes: zero_u64.clone(),
-        encrypted_no_votes: zero_u64.clone(),
-        encrypted_abstain_votes: zero_u64.clone(),
-        encrypted_total_votes: zero_u64,
+    // ==================== STATE ====================
+
+    /// Cumulative vote tally stored encrypted in the MXE cluster.
+    ///
+    /// This struct is wrapped in `Enc<Mxe, Tally>` — the MXE cluster collectively
+    /// owns the decryption key via Cerberus secret sharing. No individual node
+    /// can decrypt the tally; threshold consensus is required for `.reveal()`.
+    ///
+    /// Using `Enc<Mxe, _>` instead of `Enc<Shared, _>` ensures the tally
+    /// can only be decrypted by the distributed MXE cluster, not by any
+    /// individual client or node.
+    pub struct Tally {
+        /// Count of YES votes (encrypted)
+        pub yes: u64,
+        /// Count of NO votes (encrypted)
+        pub no: u64,
+        /// Count of ABSTAIN votes (encrypted)
+        pub abstain: u64,
+        /// Total votes cast — integrity invariant: yes + no + abstain == total
+        pub total: u64,
     }
-}
 
-/// Cast an encrypted vote into the tally.
-///
-/// This is the core privacy-preserving function. It receives an encrypted vote
-/// and updates the encrypted running totals without ever decrypting the vote.
-///
-/// # How It Works (Constant-Time MPC Pattern)
-///
-/// ```text
-/// encrypted_vote = Enc(1)  // YES, but the circuit doesn't know this
-///
-/// is_yes    = encrypted_vote.eq(Enc(1))  → Enc(true)   // encrypted comparison
-/// is_no     = encrypted_vote.eq(Enc(0))  → Enc(false)
-/// is_abstain = encrypted_vote.eq(Enc(2)) → Enc(false)
-///
-/// // Cast booleans to u64: Enc(true) → Enc(1), Enc(false) → Enc(0)
-/// // Then add to running totals — all arithmetic happens on ciphertext
-/// yes_total   = yes_total + Enc(1)   // incremented
-/// no_total    = no_total + Enc(0)    // unchanged
-/// abstain_total = abstain_total + Enc(0) // unchanged
-/// ```
-///
-/// All three comparisons always execute (constant-time), so no timing or
-/// control-flow side channel can leak the vote value.
-///
-/// # Arguments
-/// * `state` - Current encrypted voting state from the MXE
-/// * `encrypted_vote` - The voter's encrypted choice (0=NO, 1=YES, 2=ABSTAIN)
-///
-/// # Returns
-/// Updated `VotingState` with the new vote accumulated into the encrypted totals.
-#[arcis::export]
-pub fn cast_vote(state: VotingState, encrypted_vote: Enc<Shared, u8>) -> VotingState {
-    // Create encrypted constants for comparison.
-    // These are public values wrapped in Enc — the MXE can use them for
-    // encrypted equality checks without learning the vote value.
-    let one_u8: Enc<Shared, u8> = Enc::new(1u8);
-    let zero_u8: Enc<Shared, u8> = Enc::new(0u8);
-    let two_u8: Enc<Shared, u8> = Enc::new(2u8);
+    // ==================== INSTRUCTIONS ====================
 
-    // Encrypted equality checks — these produce Enc<Shared, bool> values.
-    // The result is itself encrypted; no node learns whether the comparison is true.
-    // Then .cast() converts Enc<bool> → Enc<u64> (true→1, false→0) for arithmetic.
-    let is_yes: Enc<Shared, u64> = encrypted_vote.eq(&one_u8).cast();
-    let is_no: Enc<Shared, u64> = encrypted_vote.eq(&zero_u8).cast();
-    let is_abstain: Enc<Shared, u64> = encrypted_vote.eq(&two_u8).cast();
-
-    // Increment total votes by 1 (unconditional — every valid call is one vote)
-    let one_u64: Enc<Shared, u64> = Enc::new(1u64);
-
-    // All additions happen on encrypted values — the MXE nodes perform
-    // secret-shared arithmetic without decrypting any operand.
-    VotingState {
-        encrypted_yes_votes: state.encrypted_yes_votes + is_yes,
-        encrypted_no_votes: state.encrypted_no_votes + is_no,
-        encrypted_abstain_votes: state.encrypted_abstain_votes + is_abstain,
-        encrypted_total_votes: state.encrypted_total_votes + one_u64,
+    /// Initialize a new voting session with encrypted zero counts.
+    ///
+    /// Creates a fresh `Enc<Mxe, Tally>` where all counters are encrypted zeros.
+    /// Even the initial state is indistinguishable from a tally with votes —
+    /// an observer cannot determine participation level without `.reveal()`.
+    ///
+    /// Called once per proposal via `create_proposal` → MXE → `init_tally_callback`.
+    #[instruction]
+    pub fn initialize_voting() -> Enc<Mxe, Tally> {
+        Enc::new(Tally {
+            yes: 0,
+            no: 0,
+            abstain: 0,
+            total: 0,
+        })
     }
-}
 
-/// Finalize voting and reveal aggregate results.
-///
-/// This is the ONLY function that calls `.reveal()`, and only on the aggregate
-/// totals — never on individual vote values. The MXE enforces that `.reveal()`
-/// requires threshold consensus from Arx Nodes.
-///
-/// # Security Boundary
-/// - Individual votes are NEVER revealed (no `.reveal()` on per-vote data)
-/// - Only the final sums (yes, no, abstain, total) are decrypted
-/// - The on-chain program enforces that this can only be called after the
-///   voting deadline has passed and only by the proposal authority
-///
-/// # Returns
-/// Tuple of `(yes_votes, no_votes, abstain_votes, total_votes)` in plaintext.
-/// These values are returned to the Solana program via a CPI callback.
-#[arcis::export]
-pub fn finalize_and_reveal(state: VotingState) -> (u64, u64, u64, u64) {
-    // Threshold decryption — requires consensus from MXE nodes.
-    // This is the security boundary: encrypted → plaintext.
-    let yes_votes = state.encrypted_yes_votes.reveal();
-    let no_votes = state.encrypted_no_votes.reveal();
-    let abstain_votes = state.encrypted_abstain_votes.reveal();
-    let total_votes = state.encrypted_total_votes.reveal();
+    /// Cast an encrypted vote into the tally.
+    ///
+    /// Core privacy-preserving function using constant-time MPC pattern:
+    ///
+    /// ```text
+    /// encrypted_vote = Enc(1)  // YES — but the circuit doesn't know this
+    ///
+    /// is_yes     = encrypted_vote.eq(Enc(1))  → Enc(true)   // encrypted comparison
+    /// is_no      = encrypted_vote.eq(Enc(0))  → Enc(false)
+    /// is_abstain = encrypted_vote.eq(Enc(2))  → Enc(false)
+    ///
+    /// // cast booleans to u64: Enc(true) → Enc(1), Enc(false) → Enc(0)
+    /// // add to running totals — all arithmetic on ciphertext
+    /// ```
+    ///
+    /// All three comparisons always execute (constant-time), preventing
+    /// timing or control-flow side channels from leaking the vote value.
+    ///
+    /// ## Arguments
+    /// * `state` - Current `Enc<Mxe, Tally>` from the MXE cluster
+    /// * `vote` - Voter's encrypted choice as `Enc<Shared, u8>` (0=NO, 1=YES, 2=ABSTAIN)
+    ///
+    /// ## Returns
+    /// Updated `Enc<Mxe, Tally>` with the vote accumulated into encrypted totals.
+    #[instruction]
+    pub fn cast_vote(state: Enc<Mxe, Tally>, vote: Enc<Shared, u8>) -> Enc<Mxe, Tally> {
+        let tally = state.to_arcis();
 
-    (yes_votes, no_votes, abstain_votes, total_votes)
-}
+        // Encrypted constants for comparison — public values wrapped in Enc
+        let one_u8: Enc<Shared, u8> = Enc::new(1u8);
+        let zero_u8: Enc<Shared, u8> = Enc::new(0u8);
+        let two_u8: Enc<Shared, u8> = Enc::new(2u8);
 
-/// Query current vote count without revealing the YES/NO/ABSTAIN breakdown.
-///
-/// This reveals ONLY the total count, keeping the vote distribution secret.
-/// Useful for displaying participation progress without leaking interim results.
-#[arcis::export]
-pub fn get_vote_count(state: &VotingState) -> u64 {
-    state.encrypted_total_votes.reveal()
-}
+        // Encrypted equality checks → Enc<Shared, bool>
+        // Then .cast() converts Enc<bool> → Enc<u64> (true→1, false→0)
+        let is_yes: Enc<Shared, u64> = vote.eq(&one_u8).cast();
+        let is_no: Enc<Shared, u64> = vote.eq(&zero_u8).cast();
+        let is_abstain: Enc<Shared, u64> = vote.eq(&two_u8).cast();
 
-/// Get live tally for Transparent Privacy mode.
-///
-/// Unlike `finalize_and_reveal`, this can be called during active voting to show
-/// running totals. Only appropriate for proposals with `privacy_level = 2`
-/// (Transparent Tally). Individual vote choices are still hidden — only the
-/// aggregate counts are revealed.
-///
-/// # Security Note
-/// This function reveals the current vote distribution in real-time.
-/// It should ONLY be invoked for proposals explicitly configured as Transparent.
-/// The on-chain program enforces this check before queuing this computation.
-#[arcis::export]
-pub fn get_live_tally(state: &VotingState) -> (u64, u64, u64, u64) {
-    (
-        state.encrypted_yes_votes.reveal(),
-        state.encrypted_no_votes.reveal(),
-        state.encrypted_abstain_votes.reveal(),
-        state.encrypted_total_votes.reveal(),
-    )
-}
+        let one_u64: Enc<Shared, u64> = Enc::new(1u64);
 
-/// Finalize voting with threshold check and conditional payload decryption.
-///
-/// This is the V2 execution engine function. It:
-/// 1. Reveals aggregate tallies (same as `finalize_and_reveal`)
-/// 2. Checks if quorum and threshold are met
-/// 3. Returns a `passed` boolean derived from the now-public tallies
-///
-/// The `passed` boolean is safe to branch on because the tallies are already
-/// being revealed — it's derived from public values, not encrypted state.
-///
-/// # Arguments
-/// * `state` - Current encrypted voting state
-/// * `quorum` - Minimum total votes required (plaintext, set at proposal creation)
-/// * `threshold_bps` - Required YES percentage in basis points (e.g., 5001 = 50.01%)
-///
-/// # Returns
-/// Tuple of `(yes, no, abstain, total, passed)` where `passed` indicates
-/// whether the proposal met both quorum and threshold requirements.
-#[arcis::export]
-pub fn finalize_with_threshold(
-    state: VotingState,
-    quorum: u64,
-    threshold_bps: u64,
-) -> (u64, u64, u64, u64, bool) {
-    let yes_votes = state.encrypted_yes_votes.reveal();
-    let no_votes = state.encrypted_no_votes.reveal();
-    let abstain_votes = state.encrypted_abstain_votes.reveal();
-    let total_votes = state.encrypted_total_votes.reveal();
+        // All additions happen on encrypted values — MXE nodes perform
+        // secret-shared arithmetic without decrypting any operand
+        state.owner.from_arcis(Tally {
+            yes: tally.yes + is_yes,
+            no: tally.no + is_no,
+            abstain: tally.abstain + is_abstain,
+            total: tally.total + one_u64,
+        })
+    }
 
-    let quorum_met = quorum == 0 || total_votes >= quorum;
-    let non_abstain = yes_votes + no_votes;
-    let threshold_met = non_abstain > 0 && (yes_votes * 10_000) / non_abstain >= threshold_bps;
+    /// Finalize voting and reveal aggregate results via threshold decryption.
+    ///
+    /// This is the primary reveal function. Only aggregate totals are decrypted —
+    /// individual votes are NEVER revealed. The MXE enforces that `.reveal()`
+    /// requires Cerberus threshold consensus from Arx Nodes.
+    ///
+    /// ## Security Boundary
+    /// - Individual votes: never revealed (no `.reveal()` on per-vote data)
+    /// - Aggregate totals: decrypted only here, after voting deadline
+    /// - On-chain program enforces: only proposal authority can trigger this
+    ///
+    /// ## Returns
+    /// `(yes_votes, no_votes, abstain_votes, total_votes)` in plaintext,
+    /// delivered to the Solana program via `reveal_results_callback` CPI.
+    #[instruction]
+    pub fn finalize_and_reveal(state: Enc<Mxe, Tally>) -> (u64, u64, u64, u64) {
+        let tally = state.reveal();
+        (tally.yes, tally.no, tally.abstain, tally.total)
+    }
 
-    (
-        yes_votes,
-        no_votes,
-        abstain_votes,
-        total_votes,
-        quorum_met && threshold_met,
-    )
+    /// Query current vote count without revealing the YES/NO/ABSTAIN breakdown.
+    ///
+    /// Reveals ONLY the total participation count, keeping vote distribution
+    /// secret. Useful for displaying progress bars without leaking interim results.
+    #[instruction]
+    pub fn get_vote_count(state: Enc<Mxe, Tally>) -> u64 {
+        let tally = state.reveal();
+        tally.total
+    }
+
+    /// Get live tally for Transparent Privacy mode (privacy_level = 2).
+    ///
+    /// Unlike `finalize_and_reveal`, this can be called during active voting
+    /// to show running totals. Individual vote choices remain hidden — only
+    /// aggregates are revealed. The on-chain program enforces that this is
+    /// only invoked for proposals explicitly configured as Transparent.
+    #[instruction]
+    pub fn get_live_tally(state: Enc<Mxe, Tally>) -> (u64, u64, u64, u64) {
+        let tally = state.reveal();
+        (tally.yes, tally.no, tally.abstain, tally.total)
+    }
+
+    /// Finalize voting with quorum + threshold check.
+    ///
+    /// V2 execution engine: reveals aggregates AND checks governance rules.
+    ///
+    /// ## Arguments
+    /// * `state` - Current encrypted tally
+    /// * `quorum` - Minimum total votes required (plaintext, set at proposal creation)
+    /// * `threshold_bps` - Required YES percentage in basis points (e.g., 6000 = 60%)
+    ///
+    /// ## Threshold Calculation
+    /// - Abstain votes are excluded: `non_abstain = yes + no`
+    /// - Passed = `(yes * 10_000) / non_abstain >= threshold_bps`
+    /// - Both quorum AND threshold must be met for `passed = true`
+    ///
+    /// ## Returns
+    /// `(yes, no, abstain, total, passed)` — the `passed` boolean is derived
+    /// from now-public values (safe to branch on after reveal).
+    #[instruction]
+    pub fn finalize_with_threshold(
+        state: Enc<Mxe, Tally>,
+        quorum: u64,
+        threshold_bps: u64,
+    ) -> (u64, u64, u64, u64, bool) {
+        let tally = state.reveal();
+
+        let quorum_met = quorum == 0 || tally.total >= quorum;
+        let non_abstain = tally.yes + tally.no;
+        let threshold_met =
+            non_abstain > 0 && (tally.yes * 10_000) / non_abstain >= threshold_bps;
+
+        (
+            tally.yes,
+            tally.no,
+            tally.abstain,
+            tally.total,
+            quorum_met && threshold_met,
+        )
+    }
 }
 
 // ==================== TESTS ====================
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::circuits::*;
     use arcis::testing::*;
 
     #[test]
     fn test_voting_flow() {
-        let ctx = TestContext::new();
-        let mut state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
 
         // Cast 3 YES, 2 NO, 1 ABSTAIN
         for _ in 0..3 {
@@ -255,8 +258,8 @@ mod tests {
 
     #[test]
     fn test_all_abstain() {
-        let ctx = TestContext::new();
-        let mut state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
 
         for _ in 0..5 {
             state = cast_vote(state, Enc::new(2u8));
@@ -271,8 +274,8 @@ mod tests {
 
     #[test]
     fn test_empty_voting() {
-        let ctx = TestContext::new();
-        let state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let state = initialize_voting();
 
         let (yes, no, abstain, total) = finalize_and_reveal(state);
         assert_eq!(yes, 0);
@@ -283,8 +286,8 @@ mod tests {
 
     #[test]
     fn test_single_yes_vote() {
-        let ctx = TestContext::new();
-        let mut state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
         state = cast_vote(state, Enc::new(1u8));
 
         let (yes, no, abstain, total) = finalize_and_reveal(state);
@@ -296,8 +299,8 @@ mod tests {
 
     #[test]
     fn test_single_no_vote() {
-        let ctx = TestContext::new();
-        let mut state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
         state = cast_vote(state, Enc::new(0u8));
 
         let (yes, no, abstain, total) = finalize_and_reveal(state);
@@ -309,8 +312,8 @@ mod tests {
 
     #[test]
     fn test_all_yes() {
-        let ctx = TestContext::new();
-        let mut state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
 
         for _ in 0..10 {
             state = cast_vote(state, Enc::new(1u8));
@@ -325,8 +328,8 @@ mod tests {
 
     #[test]
     fn test_all_no() {
-        let ctx = TestContext::new();
-        let mut state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
 
         for _ in 0..7 {
             state = cast_vote(state, Enc::new(0u8));
@@ -341,8 +344,8 @@ mod tests {
 
     #[test]
     fn test_large_vote_count() {
-        let ctx = TestContext::new();
-        let mut state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
 
         // Simulate 100 voters: 50 YES, 30 NO, 20 ABSTAIN
         for _ in 0..50 {
@@ -364,39 +367,35 @@ mod tests {
 
     #[test]
     fn test_vote_count_query() {
-        let ctx = TestContext::new();
-        let mut state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
 
-        // Cast some votes and check count without revealing breakdown
         for _ in 0..4 {
             state = cast_vote(state, Enc::new(1u8));
         }
         state = cast_vote(state, Enc::new(0u8));
 
-        let count = get_vote_count(&state);
+        let count = get_vote_count(state);
         assert_eq!(count, 5);
     }
 
     #[test]
     fn test_get_live_tally() {
-        let ctx = TestContext::new();
-        let mut state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
 
-        // Cast some votes
         state = cast_vote(state, Enc::new(1u8)); // YES
         state = cast_vote(state, Enc::new(1u8)); // YES
         state = cast_vote(state, Enc::new(0u8)); // NO
 
-        // Live tally reveals running totals
-        let (yes, no, abstain, total) = get_live_tally(&state);
+        let (yes, no, abstain, total) = get_live_tally(state.clone());
         assert_eq!(yes, 2);
         assert_eq!(no, 1);
         assert_eq!(abstain, 0);
         assert_eq!(total, 3);
 
-        // Cast more votes and check again
         state = cast_vote(state, Enc::new(2u8)); // ABSTAIN
-        let (yes, no, abstain, total) = get_live_tally(&state);
+        let (yes, no, abstain, total) = get_live_tally(state);
         assert_eq!(yes, 2);
         assert_eq!(no, 1);
         assert_eq!(abstain, 1);
@@ -405,8 +404,8 @@ mod tests {
 
     #[test]
     fn test_finalize_with_threshold_passes() {
-        let ctx = TestContext::new();
-        let mut state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
 
         // 7 YES, 3 NO = 70% YES
         for _ in 0..7 {
@@ -427,10 +426,9 @@ mod tests {
 
     #[test]
     fn test_finalize_with_threshold_fails_quorum() {
-        let ctx = TestContext::new();
-        let mut state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
 
-        // Only 3 votes, all YES
         for _ in 0..3 {
             state = cast_vote(state, Enc::new(1u8));
         }
@@ -443,8 +441,8 @@ mod tests {
 
     #[test]
     fn test_finalize_with_threshold_fails_threshold() {
-        let ctx = TestContext::new();
-        let mut state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
 
         // 4 YES, 6 NO = 40% YES
         for _ in 0..4 {
@@ -464,8 +462,8 @@ mod tests {
 
     #[test]
     fn test_finalize_abstains_excluded_from_threshold() {
-        let ctx = TestContext::new();
-        let mut state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
 
         // 3 YES, 2 NO, 5 ABSTAIN = 60% of non-abstain
         for _ in 0..3 {
@@ -489,10 +487,9 @@ mod tests {
 
     #[test]
     fn test_tally_consistency() {
-        let ctx = TestContext::new();
-        let mut state = initialize_voting(ctx.computation_id());
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
 
-        // Mixed votes
         state = cast_vote(state, Enc::new(1u8)); // YES
         state = cast_vote(state, Enc::new(0u8)); // NO
         state = cast_vote(state, Enc::new(2u8)); // ABSTAIN

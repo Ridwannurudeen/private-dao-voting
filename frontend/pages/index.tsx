@@ -43,6 +43,7 @@ import { Confetti } from "../components/Confetti";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { HowItWorks } from "../components/HowItWorks";
 import { VoteProgress, VoteStep } from "../components/VoteProgress";
+import { DeveloperConsole } from "../components/DeveloperConsole";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 
 import generatedIdl from "../idl/private_dao_voting.json";
@@ -759,6 +760,7 @@ export default function Home() {
       {toast && <Toast message={toast.message} type={toast.type} txUrl={toast.txUrl} onClose={() => setToast(null)} />}
       <Confetti active={showConfetti} onDone={handleConfettiDone} />
       <HowItWorks />
+      {connected && <DeveloperConsole arciumClient={arciumClient} />}
 
       {/* Keyboard shortcuts hint */}
       {connected && (

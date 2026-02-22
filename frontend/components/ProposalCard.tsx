@@ -172,6 +172,9 @@ export function ProposalCard({
 
       {/* V2 badges */}
       <div className="flex flex-wrap gap-2 mb-3">
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title="Cerberus MPC: secure even if N-1 of N nodes are malicious">
+          Cerberus Protected
+        </span>
         <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
           {PRIVACY_LABELS[p.privacyLevel] || "Full Privacy"}
         </span>
