@@ -5,11 +5,12 @@ export type ToastType = "success" | "error" | "info";
 export interface ToastData {
   message: string;
   type: ToastType;
+  txUrl?: string;
 }
 
-export function Toast({ message, type, onClose }: { message: string; type: ToastType; onClose: () => void }) {
+export function Toast({ message, type, txUrl, onClose }: { message: string; type: ToastType; txUrl?: string; onClose: () => void }) {
   useEffect(() => {
-    const timer = setTimeout(onClose, 5000);
+    const timer = setTimeout(onClose, 6000);
     return () => clearTimeout(timer);
   }, [onClose]);
 
@@ -31,10 +32,18 @@ export function Toast({ message, type, onClose }: { message: string; type: Toast
   const s = styles[type];
 
   return (
-    <div className={`fixed bottom-6 right-6 z-50 backdrop-blur-xl rounded-2xl border px-5 py-4 flex items-center gap-3 max-w-sm animate-[slideUp_0.3s_ease-out] ${s.bg}`}>
-      <span className="text-lg">{s.icon}</span>
-      <span className="text-sm leading-snug flex-1">{message}</span>
-      <button onClick={onClose} className="ml-1 opacity-60 hover:opacity-100 transition-opacity text-lg">&times;</button>
+    <div className={`fixed bottom-6 right-6 z-50 backdrop-blur-xl rounded-2xl border px-5 py-4 flex items-center gap-3 max-w-md animate-[slideUp_0.3s_ease-out] ${s.bg}`}>
+      <span className="text-lg shrink-0">{s.icon}</span>
+      <div className="flex-1 min-w-0">
+        <span className="text-sm leading-snug block">{message}</span>
+        {txUrl && (
+          <a href={txUrl} target="_blank" rel="noopener noreferrer"
+            className="text-[11px] opacity-70 hover:opacity-100 underline underline-offset-2 mt-0.5 inline-block">
+            View on Solana Explorer &rarr;
+          </a>
+        )}
+      </div>
+      <button onClick={onClose} className="ml-1 opacity-60 hover:opacity-100 transition-opacity text-lg shrink-0">&times;</button>
     </div>
   );
 }

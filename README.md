@@ -190,6 +190,46 @@ private-dao-voting/
 └──────────────────────┘                    └──────────────────────────┘
 ```
 
+### System Overview (Diagram)
+
+```mermaid
+flowchart TB
+    subgraph Browser["Voter's Browser"]
+        W[Wallet<br/>Phantom / Solflare]
+        AC[ArciumClient<br/>x25519 + RescueCipher]
+        UI[Next.js Frontend]
+    end
+
+    subgraph Solana["Solana Devnet"]
+        P[Proposal Account]
+        VR[VoteRecord PDA<br/>double-vote prevention]
+        T[Tally Account]
+        D[Delegation PDA]
+        TG[SPL Token Gate]
+    end
+
+    subgraph Arcium["Arcium MXE Cluster"]
+        N1[Arx Node 1]
+        N2[Arx Node 2]
+        N3[Arx Node N]
+        C[Arcis Circuit<br/>cast_vote / finalize]
+    end
+
+    UI -->|1. Vote choice| AC
+    AC -->|2. Encrypted vote| W
+    W -->|3. Sign + submit tx| Solana
+    TG -->|4. Verify token balance| VR
+    VR -->|5. Check no double-vote| T
+    T -->|6. CPI with ciphertext| Arcium
+    N1 & N2 & N3 -->|Secret shares| C
+    C -->|7. Threshold decrypt<br/>aggregate only| T
+    T -->|8. Revealed totals| P
+
+    style Browser fill:#1a1a2e,stroke:#7c3aed,color:#e0e0ff
+    style Solana fill:#0a1628,stroke:#06b6d4,color:#e0e0ff
+    style Arcium fill:#1a0a28,stroke:#a855f7,color:#e0e0ff
+```
+
 ---
 
 ## Security Model
