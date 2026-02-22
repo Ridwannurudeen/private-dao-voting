@@ -23,7 +23,7 @@ const STEPS = [
   },
   {
     title: "Cast Your Encrypted Vote",
-    desc: "Your vote is encrypted with x25519 + RescueCipher before leaving your browser. No one can see it.",
+    desc: "Your vote is encrypted client-side as Enc<Shared, u8> via x25519 ECDH + RescueCipher. It's secret-shared across Arx Nodes before leaving your browser.",
     icon: (
       <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -32,8 +32,8 @@ const STEPS = [
     color: "emerald",
   },
   {
-    title: "MPC Tallying",
-    desc: "Arcium MXE nodes collectively compute on encrypted votes. No single node ever sees any vote.",
+    title: "MPC Tallying (Cerberus)",
+    desc: "Arcium MXE nodes accumulate votes into Enc<Mxe, Tally> using the Cerberus protocol — dishonest majority security where even N-1 malicious nodes cannot learn or forge results.",
     icon: (
       <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
@@ -43,7 +43,7 @@ const STEPS = [
   },
   {
     title: "Results Revealed",
-    desc: "Only the aggregate totals are decrypted — individual votes stay secret forever. Correctness proofs included.",
+    desc: "Threshold decryption reveals only aggregate totals — individual votes stay secret forever. The circuit_hash! macro ensures the MPC bytecode wasn't tampered with.",
     icon: (
       <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />

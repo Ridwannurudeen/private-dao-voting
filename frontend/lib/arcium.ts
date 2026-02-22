@@ -427,3 +427,39 @@ export function deriveComputationOffset(
   if (salt !== undefined) offset = offset.add(new BN(salt));
   return offset;
 }
+
+// ==================== DEVELOPER CONSOLE HELPERS ====================
+
+/** Mempool capacity tiers available in Arcium MXE */
+export type MempoolCapacity = "Tiny" | "Small" | "Medium" | "Large";
+
+/** Get the configured mempool capacity from env or default */
+export function getMempoolCapacity(): MempoolCapacity {
+  const val = process.env.NEXT_PUBLIC_MEMPOOL_CAPACITY;
+  if (val === "Small" || val === "Medium" || val === "Large") return val;
+  return "Tiny";
+}
+
+/** Circuit hash placeholder — in production, read from deployed CompDefState */
+export function getCircuitHash(): string {
+  return process.env.NEXT_PUBLIC_CIRCUIT_HASH || "dev-mode-circuit-hash-placeholder";
+}
+
+/** Arcium circuit instruction names registered on-chain */
+export const CIRCUIT_INSTRUCTIONS = [
+  "initialize_voting",
+  "cast_vote",
+  "finalize_and_reveal",
+  "get_vote_count",
+  "get_live_tally",
+  "finalize_with_threshold",
+] as const;
+
+/** MPC protocol info for display */
+export const CERBERUS_INFO = {
+  name: "Cerberus",
+  securityModel: "Dishonest Majority",
+  tolerance: "N-1 of N nodes can be malicious",
+  guarantee: "Correct & private if at least 1 node is honest",
+  mechanism: "MAC-authenticated secret shares detect tampering",
+} as const;

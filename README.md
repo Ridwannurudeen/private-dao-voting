@@ -6,7 +6,7 @@
 
 **[Live Demo](https://privatedao-arcium.vercel.app/)** | [GitHub](https://github.com/Ridwannurudeen/private-dao-voting)
 
-Votes are encrypted client-side, tallied inside Arcium's MXE without ever being decrypted, and only the final aggregate result is published on-chain — with correctness proofs. No one (not validators, not the DAO authority, not other voters) can see how any individual voted.
+Votes are encrypted client-side, tallied inside Arcium's MXE using the **Cerberus** protocol (dishonest majority security), and only the final aggregate result is published on-chain — with correctness proofs. No one (not validators, not the DAO authority, not other voters) can see how any individual voted.
 
 ---
 
@@ -129,32 +129,40 @@ The **MXE (Multi-Party Computation eXecution Environment)** is a cluster of inde
 
 1. **Secret Sharing** — Each encrypted vote is split into cryptographic shares distributed across nodes. No single node holds enough information to reconstruct any vote.
 
-2. **Encrypted Computation** — The Arcis circuit (`cast_vote`) runs inside the MXE, performing arithmetic on `Enc<Shared, u64>` values. The addition `state.encrypted_yes_votes + is_yes` happens on ciphertext — the nodes never see plaintext.
+2. **Encrypted Computation** — The Arcis circuit (`cast_vote`) runs inside the MXE, performing arithmetic on `Enc<Mxe, Tally>` values. All additions happen on ciphertext — the nodes never see plaintext.
 
-3. **Threshold Decryption** — Only `finalize_and_reveal` triggers decryption, and only for the aggregate totals. Individual vote values are never reconstructed.
+3. **Threshold Decryption (Cerberus)** — Only `finalize_and_reveal` triggers decryption via the Cerberus protocol, and only for aggregate totals. Individual votes are never reconstructed. Cerberus provides **dishonest majority** security — even if N-1 of N nodes are malicious, they cannot learn votes or forge the tally. MAC-authenticated shares detect tampering.
 
-4. **Correctness Proofs** — The MXE produces cryptographic proofs that the published result is the correct aggregation of all submitted votes, without revealing any individual vote.
+4. **Circuit Integrity** — The `circuit_hash!` macro embeds the SHA-256 hash of the compiled circuit at build time. During `init_comp_def`, this hash is verified against the deployed bytecode — if any node runs a modified circuit, the mismatch is detected.
+
+5. **Correctness Proofs** — The MXE produces cryptographic proofs that the published result is the correct aggregation of all submitted votes, without revealing any individual vote.
 
 ### The Arcis Circuit
 
-The core privacy logic lives in `arcis/voting-circuit/src/lib.rs`:
+The core privacy logic lives in `arcis/voting-circuit/src/lib.rs`, using the `#[encrypted]` module pattern with `Enc<Mxe, Tally>` for cluster-owned state:
 
 ```rust
-#[arcis::export]
-pub fn cast_vote(
-    state: VotingState,
-    encrypted_vote: Enc<Shared, u8>,  // 0=NO, 1=YES, 2=ABSTAIN
-) -> VotingState {
-    // Encrypted comparisons — no values are revealed
-    let is_yes: Enc<Shared, u64> = encrypted_vote.eq(&Enc::new(1u8)).cast();
-    let is_no: Enc<Shared, u64> = encrypted_vote.eq(&Enc::new(0u8)).cast();
-    let is_abstain: Enc<Shared, u64> = encrypted_vote.eq(&Enc::new(2u8)).cast();
+#[encrypted]
+mod circuits {
+    use arcis_imports::*;
 
-    VotingState {
-        encrypted_yes_votes: state.encrypted_yes_votes + is_yes,
-        encrypted_no_votes: state.encrypted_no_votes + is_no,
-        encrypted_abstain_votes: state.encrypted_abstain_votes + is_abstain,
-        encrypted_total_votes: state.encrypted_total_votes + Enc::new(1u64),
+    pub struct Tally { pub yes: u64, pub no: u64, pub abstain: u64, pub total: u64 }
+
+    #[instruction]
+    pub fn cast_vote(state: Enc<Mxe, Tally>, vote: Enc<Shared, u8>) -> Enc<Mxe, Tally> {
+        let tally = state.to_arcis();
+
+        // Constant-time encrypted comparisons — no branching on secrets
+        let is_yes: Enc<Shared, u64> = vote.eq(&Enc::new(1u8)).cast();
+        let is_no: Enc<Shared, u64> = vote.eq(&Enc::new(0u8)).cast();
+        let is_abstain: Enc<Shared, u64> = vote.eq(&Enc::new(2u8)).cast();
+
+        state.owner.from_arcis(Tally {
+            yes: tally.yes + is_yes,
+            no: tally.no + is_no,
+            abstain: tally.abstain + is_abstain,
+            total: tally.total + Enc::new(1u64),
+        })
     }
 }
 ```
@@ -193,7 +201,8 @@ private-dao-voting/
 │   │   ├── StatsBar.tsx           #   Participation stats dashboard
 │   │   ├── ActivityFeed.tsx       #   On-chain event feed
 │   │   ├── ExportResults.tsx      #   CSV/JSON result export
-│   │   ├── PrivacyProtocol.tsx    #   Privacy tech explainer
+│   │   ├── PrivacyProtocol.tsx    #   Privacy tech explainer (Cerberus protocol)
+│   │   ├── DeveloperConsole.tsx   #   MXE debug panel (circuit hash, cluster info, security)
 │   │   ├── SkeletonCard.tsx       #   Shimmer loading placeholder
 │   │   ├── Modal.tsx              #   Accessible modal with focus trap
 │   │   ├── Toast.tsx              #   Notifications with Explorer links
@@ -305,7 +314,8 @@ flowchart TB
 | **Vote delegation** | On-chain delegation PDA with revocation | Governance without active participation |
 | **Callback auth** | Sign PDA signer constraint on callbacks | Unauthorized result injection |
 | **Time lock** | `voting_ends_at` timestamp enforcement | Votes after deadline |
-| **MPC integrity** | Arcium threshold cryptography | Any single node learning vote values |
+| **MPC integrity (Cerberus)** | Dishonest majority MPC — MAC-authenticated secret shares across Arx Nodes | Even N-1 malicious nodes cannot learn votes or forge tallies |
+| **Circuit integrity** | `circuit_hash!` macro embeds SHA-256 of compiled circuit at build time | Tampered MPC bytecode detected at `init_comp_def` |
 
 ---
 
@@ -418,7 +428,7 @@ Token holders can delegate their voting power to a trusted representative via an
 | Smart contract | Anchor (Solana) | 0.32.1 |
 | MPC circuit | Arcis (Arcium) | 0.1.0 |
 | Arcium client | @arcium-hq/client | 0.7.0 |
-| Frontend | Next.js + React | 14.0.4 |
+| Frontend | Next.js + React | 14.2.35 |
 | Styling | Tailwind CSS | 3.4.0 |
 | E2E testing | Playwright | latest |
 | Wallet | Solana Wallet Adapter | latest |
