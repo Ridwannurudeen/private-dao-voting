@@ -9,7 +9,7 @@ interface StatsBarProps {
 export function StatsBar({ proposals, nowTs }: StatsBarProps) {
   const totalProposals = proposals.length;
   const activeProposals = proposals.filter(
-    (p) => p.isActive && nowTs < p.votingEndsAt.toNumber()
+    (p) => p.isActive && nowTs < Number(p.votingEndsAt)
   ).length;
   const totalVotes = proposals.reduce((sum, p) => sum + (p.totalVotes || 0), 0);
   const revealedCount = proposals.filter((p) => p.isRevealed).length;

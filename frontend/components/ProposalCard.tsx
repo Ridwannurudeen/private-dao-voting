@@ -87,10 +87,10 @@ export function ProposalCard({
   onVoteStepComplete,
 }: ProposalCardProps) {
   // Real-time countdown
-  const [liveRemaining, setLiveRemaining] = useState(p.votingEndsAt.toNumber() - nowTs);
+  const [liveRemaining, setLiveRemaining] = useState(Number(p.votingEndsAt) - nowTs);
 
   useEffect(() => {
-    const endTime = p.votingEndsAt.toNumber();
+    const endTime = Number(p.votingEndsAt);
     const update = () => setLiveRemaining(endTime - Math.floor(Date.now() / 1000));
     update();
     const interval = setInterval(update, 1000);
@@ -201,7 +201,7 @@ export function ProposalCard({
       </p>
 
       {/* Token gate check */}
-      {active && !hasVoted && tokenBalance < p.minBalance.toNumber() && (
+      {active && !hasVoted && tokenBalance < Number(p.minBalance) && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 space-y-3">
           <p className="text-sm text-yellow-400">You need gate tokens to vote on this proposal.</p>
           <button onClick={onClaimTokens} disabled={isClaiming}
@@ -212,7 +212,7 @@ export function ProposalCard({
       )}
 
       {/* Voting buttons */}
-      {active && !hasVoted && tokenBalance >= p.minBalance.toNumber() && (
+      {active && !hasVoted && tokenBalance >= Number(p.minBalance) && (
         <div className="space-y-3">
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <button onClick={() => onSelectChoice("yes")} disabled={isVoting} aria-label="Vote Yes" aria-pressed={selectedChoice === "yes"}

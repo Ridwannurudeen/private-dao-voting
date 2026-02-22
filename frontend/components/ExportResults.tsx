@@ -28,7 +28,7 @@ export function ExportResults({ proposal: p }: ExportResultsProps) {
       results: { yes, no, abstain, total },
       quorum: p.quorum,
       quorumMet: p.quorum > 0 ? total >= p.quorum : null,
-      votingEndedAt: new Date(p.votingEndsAt.toNumber() * 1000).toISOString(),
+      votingEndedAt: new Date(Number(p.votingEndsAt) * 1000).toISOString(),
     };
     downloadFile(
       `proposal-${p.id.toString()}.json`,
@@ -49,7 +49,7 @@ export function ExportResults({ proposal: p }: ExportResultsProps) {
       ["Total Votes", String(total)],
       ["Quorum", String(p.quorum)],
       ["Quorum Met", p.quorum > 0 ? String(total >= p.quorum) : "N/A"],
-      ["Voting Ended", new Date(p.votingEndsAt.toNumber() * 1000).toISOString()],
+      ["Voting Ended", new Date(Number(p.votingEndsAt) * 1000).toISOString()],
     ];
     const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
     downloadFile(`proposal-${p.id.toString()}.csv`, csv, "text/csv");
