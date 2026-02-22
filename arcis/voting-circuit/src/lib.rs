@@ -215,8 +215,7 @@ mod circuits {
 
         let quorum_met = quorum == 0 || tally.total >= quorum;
         let non_abstain = tally.yes + tally.no;
-        let threshold_met =
-            non_abstain > 0 && (tally.yes * 10_000) / non_abstain >= threshold_bps;
+        let threshold_met = non_abstain > 0 && (tally.yes * 10_000) / non_abstain >= threshold_bps;
 
         (
             tally.yes,
