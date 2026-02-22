@@ -18,6 +18,7 @@ export default function App({ Component, pageProps }: AppProps) {
         <meta name="description" content="Token-gated private voting on Solana powered by Arcium MXE. Votes are encrypted end-to-end via multi-party computation — individual choices are never revealed." />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="manifest" href="/manifest.json" />
 
         {/* Open Graph */}
         <meta property="og:type" content="website" />

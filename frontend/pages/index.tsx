@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useWallet, useConnection, useAnchorWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { AnchorProvider, Program, BN, Idl } from "@coral-xyz/anchor";
@@ -38,6 +38,10 @@ import { ProposalCard, Proposal } from "../components/ProposalCard";
 import { SkeletonCard } from "../components/SkeletonCard";
 import { StatsBar } from "../components/StatsBar";
 import { ActivityFeed } from "../components/ActivityFeed";
+import { Confetti } from "../components/Confetti";
+import { ThemeToggle } from "../components/ThemeToggle";
+import { HowItWorks } from "../components/HowItWorks";
+import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 
 import generatedIdl from "../idl/private_dao_voting.json";
 
@@ -66,6 +70,7 @@ export default function Home() {
   const [delegation, setDelegation] = useState<{ delegate: PublicKey; createdAt: number } | null>(null);
   const [delegateInput, setDelegateInput] = useState("");
   const [delegating, setDelegating] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // Dev mode: track local vote tallies since MXE isn't aggregating
   const [devTallies, setDevTallies] = useState<Record<string, { yes: number; no: number; abstain: number }>>(() => {
@@ -357,6 +362,7 @@ export default function Home() {
       setToast({ message: "Encrypted vote recorded on-chain!", type: "success", txUrl: explorerTxUrl(txSig) });
       setVoted((v) => ({ ...v, [key]: true }));
       setSelected((s) => ({ ...s, [key]: null }));
+      setShowConfetti(true);
       load();
     } catch (e: any) {
       console.error("Vote error:", e);
@@ -388,10 +394,18 @@ export default function Home() {
 
   const visibleProposals = proposals.filter((p) => !hiddenProposals.has(p.publicKey.toString()));
 
+  // Keyboard shortcuts
+  const shortcutHandlers = useMemo(() => ({
+    onClose: () => setModal(false),
+    onRefresh: () => { if (connected) load(); },
+    onNewProposal: () => { if (connected) setModal(true); },
+  }), [connected, load]);
+  useKeyboardShortcuts(shortcutHandlers);
+
   return (
     <div className="min-h-screen bg-mesh">
       {/* Header */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl" style={{ background: 'rgba(10, 10, 26, 0.85)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <header className="sticky top-0 z-40 backdrop-blur-xl" role="banner" style={{ background: 'rgba(10, 10, 26, 0.85)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="max-w-6xl mx-auto flex justify-between items-center px-4 sm:px-6 py-3">
           <div className="flex items-center gap-3 min-w-0">
             {/* Logo mark */}
@@ -415,13 +429,14 @@ export default function Home() {
                 {arciumClient ? "MXE Connected" : "MXE Disconnected"}
               </span>
             )}
+            <ThemeToggle />
             <WalletMultiButton />
           </div>
         </div>
       </header>
 
       {/* Main */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8" role="main" aria-label="Governance proposals">
         {!connected ? (
           /* ==================== HERO LANDING ==================== */
           <div className="relative overflow-hidden">
@@ -639,6 +654,17 @@ export default function Home() {
 
       <CreateModal isOpen={modal} onClose={() => setModal(false)} onSubmit={create} loading={creating} />
       {toast && <Toast message={toast.message} type={toast.type} txUrl={toast.txUrl} onClose={() => setToast(null)} />}
+      <Confetti active={showConfetti} onDone={() => setShowConfetti(false)} />
+      <HowItWorks />
+
+      {/* Keyboard shortcuts hint */}
+      {connected && (
+        <div className="fixed bottom-6 left-6 z-30 hidden lg:flex items-center gap-3 text-[10px] text-gray-600">
+          <span><kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-gray-500">N</kbd> New</span>
+          <span><kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-gray-500">R</kbd> Refresh</span>
+          <span><kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-gray-500">Esc</kbd> Close</span>
+        </div>
+      )}
     </div>
   );
 }

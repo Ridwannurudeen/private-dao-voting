@@ -10,6 +10,22 @@ import {
   mintTo,
 } from "@solana/spl-token";
 
+// Rate limiting: max 3 claims per wallet per 10 minutes
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const MAX_CLAIMS = 3;
+const claimLog: Map<string, number[]> = new Map();
+
+function isRateLimited(wallet: string): boolean {
+  const now = Date.now();
+  const claims = claimLog.get(wallet) || [];
+  const recent = claims.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  claimLog.set(wallet, recent);
+  if (recent.length >= MAX_CLAIMS) return true;
+  recent.push(now);
+  claimLog.set(wallet, recent);
+  return false;
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -21,6 +37,10 @@ export default async function handler(
   const { walletAddress } = req.body;
   if (!walletAddress || typeof walletAddress !== "string") {
     return res.status(400).json({ error: "walletAddress is required" });
+  }
+
+  if (isRateLimited(walletAddress)) {
+    return res.status(429).json({ error: "Rate limited. Max 3 claims per 10 minutes." });
   }
 
   const authoritySecret = process.env.GATE_MINT_AUTHORITY;

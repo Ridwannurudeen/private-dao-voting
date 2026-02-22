@@ -3,6 +3,7 @@ import { PublicKey } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 import { LockIcon, UnlockIcon, ShieldCheckIcon } from "./Icons";
 import { ExportResults } from "./ExportResults";
+import { EncryptionAnimation } from "./EncryptionAnimation";
 
 export interface Proposal {
   publicKey: PublicKey;
@@ -99,7 +100,7 @@ export function ProposalCard({
   };
 
   return (
-    <div className="glass-card-elevated neon-border p-4 sm:p-6 relative group">
+    <article className="glass-card-elevated neon-border p-4 sm:p-6 relative group" aria-label={`Proposal: ${p.title}`} role="region">
       {isAuthority && (
         <button onClick={onToggleHide} title="Hide proposal"
           className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all p-1">
@@ -166,22 +167,24 @@ export function ProposalCard({
       {active && !hasVoted && tokenBalance >= p.minBalance.toNumber() && (
         <div className="space-y-3">
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-            <button onClick={() => onSelectChoice("yes")} disabled={isVoting}
+            <button onClick={() => onSelectChoice("yes")} disabled={isVoting} aria-label="Vote Yes" aria-pressed={selectedChoice === "yes"}
               className={`flex-1 py-3 rounded-xl font-semibold transition-all ${selectedChoice === "yes" ? "bg-emerald-500/20 text-emerald-400 border-2 border-emerald-500 shadow-lg shadow-emerald-500/25" : "bg-white/5 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10"}`}>
               YES
             </button>
-            <button onClick={() => onSelectChoice("no")} disabled={isVoting}
+            <button onClick={() => onSelectChoice("no")} disabled={isVoting} aria-label="Vote No" aria-pressed={selectedChoice === "no"}
               className={`flex-1 py-3 rounded-xl font-semibold transition-all ${selectedChoice === "no" ? "bg-red-500/20 text-red-400 border-2 border-red-500 shadow-lg shadow-red-500/25" : "bg-white/5 text-red-400 border border-red-500/30 hover:bg-red-500/10"}`}>
               NO
             </button>
-            <button onClick={() => onSelectChoice("abstain")} disabled={isVoting}
+            <button onClick={() => onSelectChoice("abstain")} disabled={isVoting} aria-label="Vote Abstain" aria-pressed={selectedChoice === "abstain"}
               className={`flex-1 py-3 rounded-xl font-semibold transition-all ${selectedChoice === "abstain" ? "bg-slate-500/20 text-slate-300 border-2 border-slate-400 shadow-lg shadow-slate-500/25" : "bg-white/5 text-slate-400 border border-slate-500/30 hover:bg-slate-500/10"}`}>
               ABSTAIN
             </button>
           </div>
           {selectedChoice && (
             <>
+              {isVoting && isEncrypting && <EncryptionAnimation active={true} />}
               <button onClick={onVote} disabled={isVoting}
+                aria-label={`Submit encrypted ${selectedChoice} vote`}
                 className="w-full py-3 bg-gradient-to-r from-purple-600 to-cyan-500 rounded-xl font-semibold disabled:opacity-50 hover:shadow-lg hover:shadow-cyan-500/20 transition-all border border-cyan-500/20">
                 {isVoting ? (isEncrypting ? "Encrypting vote..." : "Submitting to Solana...") : "Submit Encrypted Vote"}
               </button>
@@ -272,6 +275,6 @@ export function ProposalCard({
           Voting ended. Pending reveal by the proposal authority.
         </div>
       )}
-    </div>
+    </article>
   );
 }
