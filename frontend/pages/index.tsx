@@ -30,6 +30,7 @@ import {
   deriveComputationOffset,
 } from "../lib/arcium";
 import { parseAnchorError, explorerTxUrl } from "../lib/errors";
+import { withRetry } from "../lib/retry";
 import { LockIcon, ShieldCheckIcon } from "../components/Icons";
 import { Toast, ToastData } from "../components/Toast";
 import { CreateModal } from "../components/CreateModal";
@@ -71,6 +72,8 @@ export default function Home() {
   const [delegateInput, setDelegateInput] = useState("");
   const [delegating, setDelegating] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PROPOSALS_PER_PAGE = 10;
 
   // Dev mode: track local vote tallies since MXE isn't aggregating
   const [devTallies, setDevTallies] = useState<Record<string, { yes: number; no: number; abstain: number }>>(() => {
@@ -137,7 +140,7 @@ export default function Home() {
       proposalList.map(async (p) => {
         try {
           const ata = getAssociatedTokenAddressSync(p.gateMint, publicKey);
-          const info = await connection.getTokenAccountBalance(ata);
+          const info = await withRetry(() => connection.getTokenAccountBalance(ata));
           return { key: p.publicKey.toString(), balance: Number(info.value.amount) };
         } catch {
           return { key: p.publicKey.toString(), balance: 0 };
@@ -397,6 +400,11 @@ export default function Home() {
 
   const handleConfettiDone = useCallback(() => setShowConfetti(false), []);
   const visibleProposals = proposals.filter((p) => !hiddenProposals.has(p.publicKey.toString()));
+  const totalPages = Math.max(1, Math.ceil(visibleProposals.length / PROPOSALS_PER_PAGE));
+  const paginatedProposals = visibleProposals.slice(
+    (currentPage - 1) * PROPOSALS_PER_PAGE,
+    currentPage * PROPOSALS_PER_PAGE
+  );
 
   // Keyboard shortcuts
   const shortcutHandlers = useMemo(() => ({
@@ -566,7 +574,7 @@ export default function Home() {
                   </div>
                 )}
 
-                {visibleProposals.map((p) => {
+                {paginatedProposals.map((p) => {
                   const key = p.publicKey.toString();
                   return (
                     <ProposalCard
@@ -589,6 +597,39 @@ export default function Home() {
                     />
                   );
                 })}
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex justify-center items-center gap-2 pt-4">
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1.5 text-sm rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-cyan-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-8 h-8 text-sm rounded-lg transition-all ${
+                          page === currentPage
+                            ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
+                            : "bg-white/5 border border-white/10 text-gray-500 hover:text-white"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1.5 text-sm rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-cyan-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Sidebar */}

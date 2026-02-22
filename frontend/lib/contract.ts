@@ -1,6 +1,7 @@
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { Program, AnchorProvider, BN, Idl } from "@coral-xyz/anchor";
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { withRetry } from "./retry";
 
 // Deployed program ID
 export const PROGRAM_ID = new PublicKey("71tbXM3A2j5pKHfjtu1LYgY8jfQWuoZtHecDu6F6EPJH");
@@ -116,7 +117,7 @@ export async function getDelegation(
 ): Promise<{ delegate: PublicKey; createdAt: number } | null> {
   const [delegationPDA] = findDelegationPDA(delegator);
   try {
-    const data = await (program.account as any).delegation.fetch(delegationPDA);
+    const data: any = await withRetry(() => (program.account as any).delegation.fetch(delegationPDA));
     return { delegate: data.delegate, createdAt: data.createdAt?.toNumber() ?? 0 };
   } catch {
     return null;
@@ -240,13 +241,13 @@ export async function devRevealResults(
     .rpc();
 }
 
-// Fetch all proposals
+// Fetch all proposals (with retry)
 export async function fetchAllProposals(program: Program): Promise<any[]> {
-  const all = await (program.account as any).proposal.all();
+  const all: any[] = await withRetry(() => (program.account as any).proposal.all());
   return all.map((p: any) => ({ publicKey: p.publicKey, ...p.account }));
 }
 
-// Check if user has voted on a proposal
+// Check if user has voted on a proposal (with retry)
 export async function hasUserVoted(
   program: Program,
   proposalPDA: PublicKey,
@@ -254,7 +255,7 @@ export async function hasUserVoted(
 ): Promise<boolean> {
   const [voteRecordPDA] = findVoteRecordPDA(proposalPDA, voter);
   try {
-    await (program.account as any).voteRecord.fetch(voteRecordPDA);
+    await withRetry(() => (program.account as any).voteRecord.fetch(voteRecordPDA));
     return true;
   } catch {
     return false;
