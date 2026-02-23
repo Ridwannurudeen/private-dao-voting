@@ -75,6 +75,6 @@ test.describe("Private DAO Voting", () => {
   test("hero landing shows Arcium branding", async ({ page }) => {
     await page.goto("/", { waitUntil: "networkidle" });
     await expect(page.getByText("Built on Arcium MXE")).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText("Vote")).toBeVisible();
+    await expect(page.getByText("Vote", { exact: true })).toBeVisible();
   });
 });
