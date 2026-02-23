@@ -34,16 +34,18 @@ import { withRetry } from "../lib/retry";
 import { LockIcon, ShieldCheckIcon } from "../components/Icons";
 import { Toast, ToastData } from "../components/Toast";
 import { CreateModal } from "../components/CreateModal";
-import { PrivacyProtocol } from "../components/PrivacyProtocol";
 import { ProposalCard, Proposal } from "../components/ProposalCard";
 import { SkeletonCard } from "../components/SkeletonCard";
 import { StatsBar } from "../components/StatsBar";
 import { ActivityFeed } from "../components/ActivityFeed";
 import { Confetti } from "../components/Confetti";
 import { ThemeToggle } from "../components/ThemeToggle";
-import { HowItWorks } from "../components/HowItWorks";
 import { VoteProgress, VoteStep } from "../components/VoteProgress";
 import { DeveloperConsole } from "../components/DeveloperConsole";
+import { DashboardLayout } from "../components/DashboardLayout";
+import { Sidebar } from "../components/Sidebar";
+import { NetworkVisualization } from "../components/NetworkVisualization";
+import { OnboardingDrawer } from "../components/OnboardingDrawer";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 
 import generatedIdl from "../idl/private_dao_voting.json";
@@ -77,6 +79,9 @@ export default function Home() {
   const [currentPage, setCurrentPage] = useState(1);
   const [voteStep, setVoteStep] = useState<Record<string, VoteStep>>({});
   const PROPOSALS_PER_PAGE = 10;
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [devConsoleOpen, setDevConsoleOpen] = useState(false);
 
   // Dev mode: track local vote tallies since MXE isn't aggregating
   const [devTallies, setDevTallies] = useState<Record<string, { yes: number; no: number; abstain: number }>>(() => {
@@ -457,122 +462,218 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-mesh">
-      {/* Header */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl" role="banner" style={{ background: 'rgba(10, 10, 26, 0.85)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="max-w-6xl mx-auto flex justify-between items-center px-4 sm:px-6 py-3">
-          <div className="flex items-center gap-3 min-w-0">
-            {/* Logo mark */}
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 glow-purple" style={{ background: 'linear-gradient(135deg, rgba(147,51,234,0.3), rgba(34,211,238,0.2))' }}>
-              <ShieldCheckIcon className="w-5 h-5 text-cyan-400" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-lg font-bold text-gradient truncate">Private DAO Voting</h1>
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] text-gray-500 tracking-[0.2em] uppercase">Powered by Arcium</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                <span className="text-[9px] text-green-400/70">Devnet</span>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {DEVELOPMENT_MODE ? (
-              <span className="text-[10px] bg-yellow-500/10 text-yellow-400/80 px-2.5 py-1 rounded-full border border-yellow-500/20 hidden sm:inline">Dev Mode</span>
-            ) : (
-              <span className={`text-[10px] px-2.5 py-1 rounded-full border hidden sm:inline ${arciumClient ? "bg-green-500/10 text-green-400/80 border-green-500/20" : "bg-red-500/10 text-red-400/80 border-red-500/20"}`}>
-                {arciumClient ? "MXE Connected" : "MXE Disconnected"}
-              </span>
-            )}
-            <ThemeToggle />
-            <WalletMultiButton />
-          </div>
-        </div>
-      </header>
-
-      {/* Main */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8" role="main" aria-label="Governance proposals">
-        {!connected ? (
-          /* ==================== HERO LANDING ==================== */
-          <div className="relative overflow-hidden">
-            {/* Floating orbs */}
-            <div className="orb orb-purple w-[400px] h-[400px] -top-32 -left-32" />
-            <div className="orb orb-cyan w-[300px] h-[300px] top-20 right-0" />
-            <div className="orb orb-blue w-[250px] h-[250px] bottom-0 left-1/3" />
-
-            <div className="relative grid-pattern py-16 sm:py-24">
-              {/* Main hero */}
-              <div className="text-center mb-16">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-cyan-500/20 bg-cyan-500/5 mb-8">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                  <span className="text-xs text-cyan-400">Built on Arcium MXE &mdash; Confidential Computing for Solana</span>
+      {!connected ? (
+        /* ==================== HERO LANDING (unchanged) ==================== */
+        <>
+          <header className="sticky top-0 z-40 backdrop-blur-xl" role="banner" style={{ background: 'rgba(10, 10, 26, 0.85)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="max-w-6xl mx-auto flex justify-between items-center px-4 sm:px-6 py-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 glow-purple" style={{ background: 'linear-gradient(135deg, rgba(147,51,234,0.3), rgba(34,211,238,0.2))' }}>
+                  <ShieldCheckIcon className="w-5 h-5 text-cyan-400" />
                 </div>
-
-                <h2 className="text-4xl sm:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
-                  <span className="text-white">Vote </span>
-                  <span className="text-gradient-animated">Privately</span>
-                  <br />
-                  <span className="text-white">on Solana</span>
-                </h2>
-
-                <p className="text-gray-400 text-lg sm:text-xl mb-4 max-w-2xl mx-auto leading-relaxed">
-                  Token-gated governance where individual votes are
-                  <span className="text-cyan-400"> never revealed</span>.
-                  Encrypted, tallied via MPC, verified on-chain.
-                </p>
-
-                <p className="text-gray-500 text-sm mb-10 max-w-lg mx-auto">
-                  No vote buying. No social coercion. No front-running. Just anonymous, verifiable results.
-                </p>
-
+                <div className="min-w-0">
+                  <h1 className="text-lg font-bold text-gradient truncate">Private DAO Voting</h1>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-gray-500 tracking-[0.2em] uppercase">Powered by Arcium</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                    <span className="text-[9px] text-green-400/70">Devnet</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <ThemeToggle />
                 <WalletMultiButton />
               </div>
+            </div>
+          </header>
 
-              {/* Feature cards */}
-              <div className="grid sm:grid-cols-3 gap-4 max-w-4xl mx-auto">
-                <div className="glass-card-elevated p-6 text-center group hover:border-cyan-500/20 transition-all duration-500">
-                  <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto mb-4 group-hover:glow-cyan transition-all">
-                    <LockIcon className="w-6 h-6 text-cyan-400" />
+          <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8" role="main">
+            <div className="relative overflow-hidden">
+              <div className="orb orb-purple w-[400px] h-[400px] -top-32 -left-32" />
+              <div className="orb orb-cyan w-[300px] h-[300px] top-20 right-0" />
+              <div className="orb orb-blue w-[250px] h-[250px] bottom-0 left-1/3" />
+
+              <div className="relative grid-pattern py-16 sm:py-24">
+                <div className="text-center mb-16">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-cyan-500/20 bg-cyan-500/5 mb-8">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                    <span className="text-xs text-cyan-400">Built on Arcium MXE &mdash; Confidential Computing for Solana</span>
                   </div>
-                  <h3 className="font-semibold text-white mb-2">Encrypted Votes</h3>
-                  <p className="text-sm text-gray-400 leading-relaxed">x25519 ECDH + RescueCipher encryption before votes leave your browser</p>
+
+                  <h2 className="text-4xl sm:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
+                    <span className="text-white">Vote </span>
+                    <span className="text-gradient-animated">Privately</span>
+                    <br />
+                    <span className="text-white">on Solana</span>
+                  </h2>
+
+                  <p className="text-gray-400 text-lg sm:text-xl mb-4 max-w-2xl mx-auto leading-relaxed">
+                    Token-gated governance where individual votes are
+                    <span className="text-cyan-400"> never revealed</span>.
+                    Encrypted, tallied via MPC, verified on-chain.
+                  </p>
+
+                  <p className="text-gray-500 text-sm mb-10 max-w-lg mx-auto">
+                    No vote buying. No social coercion. No front-running. Just anonymous, verifiable results.
+                  </p>
+
+                  <WalletMultiButton />
                 </div>
 
-                <div className="glass-card-elevated p-6 text-center group hover:border-purple-500/20 transition-all duration-500">
-                  <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-4 group-hover:glow-purple transition-all">
-                    <svg className="w-6 h-6 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
-                      <circle cx="8" cy="14" r="1" fill="currentColor" /><circle cx="13" cy="14" r="1" fill="currentColor" />
-                      <path d="M8 14h5" />
-                    </svg>
+                <div className="grid sm:grid-cols-3 gap-4 max-w-4xl mx-auto">
+                  <div className="glass-card-elevated p-6 text-center group hover:border-cyan-500/20 transition-all duration-500">
+                    <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto mb-4 group-hover:glow-cyan transition-all">
+                      <LockIcon className="w-6 h-6 text-cyan-400" />
+                    </div>
+                    <h3 className="font-semibold text-white mb-2">Encrypted Votes</h3>
+                    <p className="text-sm text-gray-400 leading-relaxed">x25519 ECDH + RescueCipher encryption before votes leave your browser</p>
                   </div>
-                  <h3 className="font-semibold text-white mb-2">MPC Tallying</h3>
-                  <p className="text-sm text-gray-400 leading-relaxed">Arcium MXE nodes compute on encrypted data &mdash; no single party sees votes</p>
+
+                  <div className="glass-card-elevated p-6 text-center group hover:border-purple-500/20 transition-all duration-500">
+                    <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-4 group-hover:glow-purple transition-all">
+                      <svg className="w-6 h-6 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+                        <circle cx="8" cy="14" r="1" fill="currentColor" /><circle cx="13" cy="14" r="1" fill="currentColor" />
+                        <path d="M8 14h5" />
+                      </svg>
+                    </div>
+                    <h3 className="font-semibold text-white mb-2">MPC Tallying</h3>
+                    <p className="text-sm text-gray-400 leading-relaxed">Arcium MXE nodes compute on encrypted data &mdash; no single party sees votes</p>
+                  </div>
+
+                  <div className="glass-card-elevated p-6 text-center group hover:border-emerald-500/20 transition-all duration-500">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+                      <ShieldCheckIcon className="w-6 h-6 text-emerald-400" />
+                    </div>
+                    <h3 className="font-semibold text-white mb-2">Verified Results</h3>
+                    <p className="text-sm text-gray-400 leading-relaxed">Correctness proofs guarantee the tally matches all submitted votes</p>
+                  </div>
                 </div>
 
-                <div className="glass-card-elevated p-6 text-center group hover:border-emerald-500/20 transition-all duration-500">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-4">
-                    <ShieldCheckIcon className="w-6 h-6 text-emerald-400" />
-                  </div>
-                  <h3 className="font-semibold text-white mb-2">Verified Results</h3>
-                  <p className="text-sm text-gray-400 leading-relaxed">Correctness proofs guarantee the tally matches all submitted votes</p>
+                <div className="flex justify-center gap-6 mt-12 flex-wrap">
+                  {["Solana", "Anchor", "Arcium MXE", "x25519", "SPL Tokens"].map((t) => (
+                    <span key={t} className="text-xs text-gray-500 border border-white/5 px-3 py-1.5 rounded-full">{t}</span>
+                  ))}
                 </div>
-              </div>
-
-              {/* Tech badges */}
-              <div className="flex justify-center gap-6 mt-12 flex-wrap">
-                {["Solana", "Anchor", "Arcium MXE", "x25519", "SPL Tokens"].map((t) => (
-                  <span key={t} className="text-xs text-gray-500 border border-white/5 px-3 py-1.5 rounded-full">{t}</span>
-                ))}
               </div>
             </div>
+          </main>
+        </>
+      ) : (
+        /* ==================== DASHBOARD LAYOUT ==================== */
+        <DashboardLayout
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          sidebar={
+            <Sidebar
+              arciumClient={arciumClient}
+              connected={connected}
+              onOpenDrawer={() => setDrawerOpen(true)}
+            />
+          }
+          rightPanel={
+            <>
+              {/* Live Network Visualization */}
+              <NetworkVisualization isConnected={!!arciumClient} />
+
+              {/* Create Proposal */}
+              <button
+                onClick={() => setModal(true)}
+                className="w-full btn-primary py-3 text-sm !rounded-xl flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Create Proposal
+              </button>
+
+              {/* Delegation Panel */}
+              <div className="glass-card-elevated p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+                    <svg className="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><path d="M20 8v6M23 11h-6" />
+                    </svg>
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">Vote Delegation</h3>
+                </div>
+                {delegation ? (
+                  <div className="space-y-3">
+                    <div className="bg-cyan-500/5 border border-cyan-500/10 rounded-xl p-3">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Delegated to</p>
+                      <p className="text-xs text-cyan-400 font-mono">{delegation.delegate.toString().slice(0, 12)}...{delegation.delegate.toString().slice(-4)}</p>
+                    </div>
+                    <button onClick={handleRevoke} disabled={delegating}
+                      className="w-full py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl text-xs hover:bg-red-500/20 transition-all disabled:opacity-50">
+                      {delegating ? "Revoking..." : "Revoke Delegation"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <input
+                      value={delegateInput}
+                      onChange={(e) => setDelegateInput(e.target.value)}
+                      placeholder="Enter delegate wallet address"
+                      className="w-full px-3 py-2.5 bg-white/3 border border-white/8 rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30 transition-colors"
+                    />
+                    <button onClick={handleDelegate} disabled={delegating || !delegateInput.trim()}
+                      className="w-full py-2.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-xl text-xs font-medium hover:bg-cyan-500/20 transition-all disabled:opacity-50">
+                      {delegating ? "Delegating..." : "Delegate Votes"}
+                    </button>
+                  </div>
+                )}
+                <p className="text-[10px] text-gray-600 mt-2 leading-relaxed">Delegate your voting power to a trusted address on-chain.</p>
+              </div>
+
+              {/* Activity Feed */}
+              {!loading && proposals.length > 0 && (
+                <ActivityFeed connection={connection} />
+              )}
+            </>
+          }
+        >
+          {/* ===== MAIN CONTENT AREA ===== */}
+
+          {/* Dashboard Top Bar */}
+          <div className="dashboard-topbar flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="flex items-center gap-4 min-w-0 pl-12 lg:pl-0">
+              <h2 className="text-xl sm:text-2xl font-bold text-gradient truncate">Private DAO Governance</h2>
+              <div className="hidden sm:flex items-center gap-2">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                  arciumClient
+                    ? "bg-green-500/10 text-green-400 border-green-500/20"
+                    : DEVELOPMENT_MODE
+                    ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
+                    : "bg-red-500/10 text-red-400 border-red-500/20"
+                }`}>
+                  {arciumClient ? "MXE Active" : DEVELOPMENT_MODE ? "Dev Mode" : "MXE Offline"}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                  Cerberus Protocol
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setDevConsoleOpen(true)}
+                className="px-3 py-1.5 text-[10px] bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all hidden sm:inline-flex items-center gap-1.5"
+              >
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                System Integrity
+              </button>
+              <ThemeToggle />
+              <WalletMultiButton />
+            </div>
           </div>
-        ) : (
-          /* ==================== CONNECTED STATE ==================== */
-          <div className="space-y-6">
-            {/* Top bar: title + actions */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+
+          {/* Main scrollable content */}
+          <div className="px-6 py-6 space-y-6" role="main" aria-label="Governance proposals">
+            {/* Action bar */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
-                <h2 className="text-2xl sm:text-3xl font-bold text-white">Governance</h2>
-                <p className="text-sm text-gray-500 mt-0.5">
+                <p className="text-sm text-gray-500">
                   {proposals.length} proposal{proposals.length !== 1 ? "s" : ""}
                   {hiddenProposals.size > 0 && (
                     <button onClick={() => { setHiddenProposals(new Set()); localStorage.removeItem("hiddenProposals"); }}
@@ -583,8 +684,8 @@ export default function Home() {
                 </p>
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
-                <button onClick={load} className="btn-secondary flex-1 sm:flex-none px-4 py-2.5 text-sm !rounded-xl">Refresh</button>
-                <button onClick={() => setModal(true)} className="btn-primary flex-1 sm:flex-none px-5 py-2.5 text-sm !rounded-xl">+ New Proposal</button>
+                <button onClick={load} className="btn-secondary flex-1 sm:flex-none px-4 py-2 text-sm !rounded-xl">Refresh</button>
+                <button onClick={() => setModal(true)} className="btn-primary flex-1 sm:flex-none px-4 py-2 text-sm !rounded-xl xl:hidden">+ New Proposal</button>
               </div>
             </div>
 
@@ -593,183 +694,118 @@ export default function Home() {
               <StatsBar proposals={proposals} nowTs={nowTs} />
             )}
 
-            {/* Two column layout: proposals + sidebar */}
-            <div className="grid lg:grid-cols-[1fr_320px] gap-6">
-              {/* Proposals column */}
-              <div className="space-y-4 min-w-0">
-                {loading && (
-                  <>
-                    <SkeletonCard />
-                    <SkeletonCard />
-                  </>
-                )}
-
-                {!loading && proposals.length === 0 && (
-                  <div className="text-center py-16 glass-card-elevated p-8">
-                    <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-6">
-                      <LockIcon className="w-8 h-8 text-purple-400" />
-                    </div>
-                    <h3 className="text-xl font-semibold mb-2 text-white">Welcome to Private DAO Voting</h3>
-                    <p className="text-gray-400 mb-6 max-w-md mx-auto">No proposals yet. Create the first one to start encrypted governance — votes are sealed with Arcium MPC and only aggregate results are revealed.</p>
-                    <button onClick={() => setModal(true)} className="btn-primary px-8 py-3 text-base">+ Create First Proposal</button>
-
-                    {/* Quick start guide */}
-                    <div className="mt-8 pt-6 border-t border-white/5 grid sm:grid-cols-3 gap-4 text-left max-w-lg mx-auto">
-                      <div className="flex items-start gap-2">
-                        <span className="text-cyan-400 text-sm font-bold mt-0.5">1.</span>
-                        <p className="text-xs text-gray-500">Create a proposal with a title, description, and voting duration</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-cyan-400 text-sm font-bold mt-0.5">2.</span>
-                        <p className="text-xs text-gray-500">Community members cast encrypted votes (YES / NO / ABSTAIN)</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-cyan-400 text-sm font-bold mt-0.5">3.</span>
-                        <p className="text-xs text-gray-500">After voting ends, reveal the aggregate results with correctness proofs</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {paginatedProposals.map((p) => {
-                  const key = p.publicKey.toString();
-                  return (
-                    <ProposalCard
-                      key={key}
-                      proposal={p}
-                      nowTs={nowTs}
-                      publicKey={publicKey}
-                      hasVoted={voted[key] || false}
-                      tokenBalance={tokenBalances[key] ?? 0}
-                      selectedChoice={selected[key] || null}
-                      isVoting={voting[key] || false}
-                      isRevealing={revealing[key] || false}
-                      isClaiming={claiming[key] || false}
-                      isEncrypting={isEncrypting}
-                      currentVoteStep={voteStep[key] || "idle"}
-                      onSelectChoice={(choice) => setSelected((s) => ({ ...s, [key]: choice }))}
-                      onVote={() => vote(p, selected[key]!)}
-                      onReveal={() => reveal(p)}
-                      onClaimTokens={() => claimTokens(p)}
-                      onToggleHide={() => toggleHideProposal(key)}
-                      onVoteStepComplete={() => setVoteStep((s) => ({ ...s, [key]: "idle" }))}
-                    />
-                  );
-                })}
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex justify-center items-center gap-2 pt-4">
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="px-3 py-1.5 text-sm rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-cyan-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      Prev
-                    </button>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
-                        className={`w-8 h-8 text-sm rounded-lg transition-all ${
-                          page === currentPage
-                            ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
-                            : "bg-white/5 border border-white/10 text-gray-500 hover:text-white"
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="px-3 py-1.5 text-sm rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-cyan-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      Next
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Sidebar */}
+            {/* Proposals list */}
+            {loading && (
               <div className="space-y-4">
-                {/* Delegation Panel */}
-                <div className="glass-card-elevated p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-                      <svg className="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><path d="M20 8v6M23 11h-6" />
-                      </svg>
-                    </div>
-                    <h3 className="text-sm font-semibold text-white">Vote Delegation</h3>
-                  </div>
-                  {delegation ? (
-                    <div className="space-y-3">
-                      <div className="bg-cyan-500/5 border border-cyan-500/10 rounded-xl p-3">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Delegated to</p>
-                        <p className="text-xs text-cyan-400 font-mono">{delegation.delegate.toString().slice(0, 12)}...{delegation.delegate.toString().slice(-4)}</p>
-                      </div>
-                      <button onClick={handleRevoke} disabled={delegating}
-                        className="w-full py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl text-xs hover:bg-red-500/20 transition-all disabled:opacity-50">
-                        {delegating ? "Revoking..." : "Revoke Delegation"}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <input
-                        value={delegateInput}
-                        onChange={(e) => setDelegateInput(e.target.value)}
-                        placeholder="Enter delegate wallet address"
-                        className="w-full px-3 py-2.5 bg-white/3 border border-white/8 rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30 transition-colors"
-                      />
-                      <button onClick={handleDelegate} disabled={delegating || !delegateInput.trim()}
-                        className="w-full py-2.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-xl text-xs font-medium hover:bg-cyan-500/20 transition-all disabled:opacity-50">
-                        {delegating ? "Delegating..." : "Delegate Votes"}
-                      </button>
-                    </div>
-                  )}
-                  <p className="text-[10px] text-gray-600 mt-2 leading-relaxed">Delegate your voting power to a trusted address on-chain.</p>
-                </div>
-
-                {/* Activity Feed */}
-                {!loading && proposals.length > 0 && (
-                  <ActivityFeed connection={connection} />
-                )}
-
-                {/* Privacy Protocol (collapsed in sidebar) */}
-                <PrivacyProtocol />
+                <SkeletonCard />
+                <SkeletonCard />
               </div>
+            )}
+
+            {!loading && proposals.length === 0 && (
+              <div className="text-center py-16 glass-card-elevated p-8">
+                <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-6">
+                  <LockIcon className="w-8 h-8 text-purple-400" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2 text-white">Welcome to Private DAO Voting</h3>
+                <p className="text-gray-400 mb-6 max-w-md mx-auto">No proposals yet. Create the first one to start encrypted governance — votes are sealed with Arcium MPC and only aggregate results are revealed.</p>
+                <button onClick={() => setModal(true)} className="btn-primary px-8 py-3 text-base">+ Create First Proposal</button>
+
+                <div className="mt-8 pt-6 border-t border-white/5 grid sm:grid-cols-3 gap-4 text-left max-w-lg mx-auto">
+                  <div className="flex items-start gap-2">
+                    <span className="text-cyan-400 text-sm font-bold mt-0.5">1.</span>
+                    <p className="text-xs text-gray-500">Create a proposal with a title, description, and voting duration</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-cyan-400 text-sm font-bold mt-0.5">2.</span>
+                    <p className="text-xs text-gray-500">Community members cast encrypted votes (YES / NO / ABSTAIN)</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-cyan-400 text-sm font-bold mt-0.5">3.</span>
+                    <p className="text-xs text-gray-500">After voting ends, reveal the aggregate results with correctness proofs</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {paginatedProposals.map((p) => {
+                const key = p.publicKey.toString();
+                return (
+                  <ProposalCard
+                    key={key}
+                    proposal={p}
+                    nowTs={nowTs}
+                    publicKey={publicKey}
+                    hasVoted={voted[key] || false}
+                    tokenBalance={tokenBalances[key] ?? 0}
+                    selectedChoice={selected[key] || null}
+                    isVoting={voting[key] || false}
+                    isRevealing={revealing[key] || false}
+                    isClaiming={claiming[key] || false}
+                    isEncrypting={isEncrypting}
+                    currentVoteStep={voteStep[key] || "idle"}
+                    onSelectChoice={(choice) => setSelected((s) => ({ ...s, [key]: choice }))}
+                    onVote={() => vote(p, selected[key]!)}
+                    onReveal={() => reveal(p)}
+                    onClaimTokens={() => claimTokens(p)}
+                    onToggleHide={() => toggleHideProposal(key)}
+                    onVoteStepComplete={() => setVoteStep((s) => ({ ...s, [key]: "idle" }))}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-2 pt-4">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 text-sm rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-cyan-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Prev
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`w-8 h-8 text-sm rounded-lg transition-all ${
+                      page === currentPage
+                        ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
+                        : "bg-white/5 border border-white/10 text-gray-500 hover:text-white"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 text-sm rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-cyan-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+
+            {/* Right panel content on smaller screens (below xl) */}
+            <div className="xl:hidden space-y-4 mt-6">
+              <NetworkVisualization isConnected={!!arciumClient} />
+              {!loading && proposals.length > 0 && (
+                <ActivityFeed connection={connection} />
+              )}
             </div>
           </div>
-        )}
-      </main>
+        </DashboardLayout>
+      )}
 
-      {/* Footer */}
-      <footer className="border-t border-white/5 mt-16">
-        <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row justify-between items-center gap-3">
-          <p className="text-xs text-gray-600">Private DAO Voting &mdash; Confidential governance on Solana</p>
-          <div className="flex items-center gap-4">
-            <a href="https://github.com/Ridwannurudeen/private-dao-voting" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-cyan-400 transition-colors">GitHub</a>
-            <span className="text-gray-700">|</span>
-            <span className="text-xs text-gray-600">Powered by Arcium MXE</span>
-          </div>
-        </div>
-      </footer>
-
+      {/* Overlays — always rendered regardless of layout */}
       <CreateModal isOpen={modal} onClose={() => setModal(false)} onSubmit={create} loading={creating} />
       {toast && <Toast message={toast.message} type={toast.type} txUrl={toast.txUrl} onClose={() => setToast(null)} />}
       <Confetti active={showConfetti} onDone={handleConfettiDone} />
-      <HowItWorks />
-      {connected && <DeveloperConsole arciumClient={arciumClient} />}
-
-      {/* Keyboard shortcuts hint */}
-      {connected && (
-        <div className="fixed bottom-6 left-6 z-30 hidden lg:flex items-center gap-3 text-[10px] text-gray-600">
-          <span><kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-gray-500">N</kbd> New</span>
-          <span><kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-gray-500">R</kbd> Refresh</span>
-          <span><kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-gray-500">Esc</kbd> Close</span>
-        </div>
-      )}
+      <OnboardingDrawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <DeveloperConsole arciumClient={arciumClient} isOpen={devConsoleOpen} onClose={() => setDevConsoleOpen(false)} />
     </div>
   );
 }
