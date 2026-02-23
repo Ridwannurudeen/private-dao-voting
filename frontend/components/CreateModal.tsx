@@ -149,7 +149,7 @@ export function CreateModal({ isOpen, onClose, onSubmit, loading }: CreateModalP
           <input
             value={title} onChange={(e) => setTitle(e.target.value.slice(0, 100))}
             placeholder="Enter proposal title..."
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/30 transition-all"
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white caret-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/30 transition-all"
             disabled={loading}
           />
         </div>
@@ -184,7 +184,7 @@ export function CreateModal({ isOpen, onClose, onSubmit, loading }: CreateModalP
               value={desc} onChange={(e) => setDesc(e.target.value.slice(0, 5000))}
               placeholder="Describe your proposal... (Markdown supported: **bold**, *italic*, ## headings, - lists, | tables |)"
               rows={4}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white resize-none focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/30 transition-all font-mono text-sm"
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white caret-cyan-400 resize-none focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/30 transition-all font-mono text-sm"
               disabled={loading}
             />
           )}
@@ -198,7 +198,7 @@ export function CreateModal({ isOpen, onClose, onSubmit, loading }: CreateModalP
             value={discussionUrl}
             onChange={(e) => setDiscussionUrl(e.target.value)}
             placeholder="https://forum.dao.xyz/proposal-42"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/30 transition-all text-sm"
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white caret-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/30 transition-all text-sm"
             disabled={loading}
           />
           {discussionUrl.trim() && (
@@ -229,7 +229,7 @@ export function CreateModal({ isOpen, onClose, onSubmit, loading }: CreateModalP
             <label className="block text-sm text-gray-400 mb-1">Quorum (minimum votes required, 0 = none)</label>
             <input value={quorum} onChange={(e) => setQuorum(e.target.value)}
               placeholder="0"
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/30 transition-all"
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white caret-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/30 transition-all"
               disabled={loading}
             />
           </div>
@@ -308,7 +308,7 @@ export function CreateModal({ isOpen, onClose, onSubmit, loading }: CreateModalP
             <label className="block text-sm text-gray-400 mb-1">Gate Token Mint</label>
             <input value={gateMint} onChange={(e) => setGateMint(e.target.value)}
               placeholder="Token mint address..."
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/30 transition-all"
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white caret-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/30 transition-all"
               disabled={loading}
             />
           </div>
@@ -318,7 +318,7 @@ export function CreateModal({ isOpen, onClose, onSubmit, loading }: CreateModalP
             <label className="block text-sm text-gray-400 mb-1">Minimum Token Balance</label>
             <input value={minBalance} onChange={(e) => setMinBalance(e.target.value)}
               placeholder="1"
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/30 transition-all"
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white caret-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/30 transition-all"
               disabled={loading}
             />
           </div>

@@ -1,16 +1,27 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 
 export function Modal({ isOpen, onClose, children }: { isOpen: boolean; onClose: () => void; children: React.ReactNode }) {
   const modalRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   // Focus trap and Esc to close
   useEffect(() => {
     if (!isOpen) return;
     const prevFocus = document.activeElement as HTMLElement;
-    modalRef.current?.focus();
+
+    // Focus the first input/textarea inside the modal, falling back to the modal itself
+    requestAnimationFrame(() => {
+      const firstInput = modalRef.current?.querySelector<HTMLElement>("input, textarea, select");
+      if (firstInput) {
+        firstInput.focus();
+      } else {
+        modalRef.current?.focus();
+      }
+    });
 
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "Escape") { onCloseRef.current(); return; }
       if (e.key !== "Tab" || !modalRef.current) return;
 
       const focusable = modalRef.current.querySelectorAll<HTMLElement>(
@@ -34,7 +45,7 @@ export function Modal({ isOpen, onClose, children }: { isOpen: boolean; onClose:
       window.removeEventListener("keydown", handleKey);
       prevFocus?.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
   return (
