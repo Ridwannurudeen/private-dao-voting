@@ -259,9 +259,14 @@ export default function Home() {
   // Track previous connection state for disconnect detection
   const [wasConnected, setWasConnected] = useState(false);
 
-  // Auto-load when wallet connects, clear state on disconnect
+  // Auto-load when wallet connects (or switches accounts), clear state on disconnect
   useEffect(() => {
-    if (connected && anchorWallet) {
+    if (connected && anchorWallet && publicKey) {
+      // Reset stale state from previous wallet before loading
+      setVoted({});
+      setSelected({});
+      setTokenBalances({});
+      setDelegation(null);
       load();
       setWasConnected(true);
     } else {
@@ -275,7 +280,7 @@ export default function Home() {
       setDelegation(null);
       setCurrentPage(1);
     }
-  }, [connected, anchorWallet, load]);
+  }, [connected, anchorWallet, publicKey, load]);
 
   // Check delegation status
   useEffect(() => {
