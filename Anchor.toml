@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-private_dao_voting = "XBdTCeLj6K8ociVWPectPoFQJ2Nowa6saHP2jM74ka8"
+private_dao_voting = "71tbXM3A2j5pKHfjtu1LYgY8jfQWuoZtHecDu6F6EPJH"
 
 [registry]
 url = "https://api.apr.dev"
