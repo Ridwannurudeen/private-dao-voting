@@ -53,6 +53,18 @@ export default async function handler(
     return res.status(500).json({ error: "Faucet not configured: missing NEXT_PUBLIC_GATE_MINT" });
   }
 
+  // Validate walletAddress is a valid Solana public key before proceeding
+  let recipient: PublicKey;
+  try {
+    recipient = new PublicKey(walletAddress);
+    // Reject zero address and system program
+    if (recipient.equals(PublicKey.default)) {
+      return res.status(400).json({ error: "Invalid wallet address" });
+    }
+  } catch {
+    return res.status(400).json({ error: "Invalid wallet address: not a valid base58 public key" });
+  }
+
   try {
     // Support both formats:
     // 1. Raw JSON array from keypair file: [174,47,154,...]
@@ -62,8 +74,9 @@ export default async function handler(
       : Buffer.from(authoritySecret, "base64").toString("utf-8");
     const secretKey = Uint8Array.from(JSON.parse(keyString));
     const mintAuthority = Keypair.fromSecretKey(secretKey);
+    // Zero the parsed secret key array after use
+    secretKey.fill(0);
     const gateMint = new PublicKey(gateMintStr);
-    const recipient = new PublicKey(walletAddress);
 
     const connection = new Connection(
       process.env.NEXT_PUBLIC_SOLANA_RPC || clusterApiUrl("devnet"),

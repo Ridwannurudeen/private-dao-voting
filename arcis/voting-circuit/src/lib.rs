@@ -134,7 +134,10 @@ mod circuits {
         let is_no: Enc<Shared, u64> = vote.eq(&zero_u8).cast();
         let is_abstain: Enc<Shared, u64> = vote.eq(&two_u8).cast();
 
-        let one_u64: Enc<Shared, u64> = Enc::new(1u64);
+        // Only count the vote if it matched a valid category (0, 1, or 2).
+        // Invalid values (e.g. 3, 255) will have is_valid = 0, so total
+        // stays unchanged and the invariant yes + no + abstain == total holds.
+        let is_valid: Enc<Shared, u64> = is_yes + is_no + is_abstain;
 
         // All additions happen on encrypted values — MXE nodes perform
         // secret-shared arithmetic without decrypting any operand
@@ -142,7 +145,7 @@ mod circuits {
             yes: tally.yes + is_yes,
             no: tally.no + is_no,
             abstain: tally.abstain + is_abstain,
-            total: tally.total + one_u64,
+            total: tally.total + is_valid,
         })
     }
 
@@ -482,6 +485,46 @@ mod tests {
         assert_eq!(abstain, 5);
         assert_eq!(total, 10);
         assert!(passed);
+    }
+
+    #[test]
+    fn test_invalid_vote_ignored() {
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
+
+        // Cast 2 valid votes
+        state = cast_vote(state, Enc::new(1u8)); // YES
+        state = cast_vote(state, Enc::new(0u8)); // NO
+
+        // Cast invalid votes — should be silently ignored
+        state = cast_vote(state, Enc::new(3u8)); // invalid
+        state = cast_vote(state, Enc::new(255u8)); // invalid
+
+        // Cast 1 more valid vote
+        state = cast_vote(state, Enc::new(2u8)); // ABSTAIN
+
+        let (yes, no, abstain, total) = finalize_and_reveal(state);
+        assert_eq!(yes, 1);
+        assert_eq!(no, 1);
+        assert_eq!(abstain, 1);
+        assert_eq!(total, 3); // only 3 valid votes counted
+        assert_eq!(yes + no + abstain, total); // invariant holds
+    }
+
+    #[test]
+    fn test_all_invalid_votes() {
+        let _ctx = TestContext::new();
+        let mut state = initialize_voting();
+
+        state = cast_vote(state, Enc::new(3u8));
+        state = cast_vote(state, Enc::new(4u8));
+        state = cast_vote(state, Enc::new(100u8));
+
+        let (yes, no, abstain, total) = finalize_and_reveal(state);
+        assert_eq!(yes, 0);
+        assert_eq!(no, 0);
+        assert_eq!(abstain, 0);
+        assert_eq!(total, 0); // no valid votes
     }
 
     #[test]
