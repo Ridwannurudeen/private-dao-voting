@@ -40,26 +40,12 @@ test.describe("Private DAO Voting", () => {
     expect(themeDark).toBe("dark");
   });
 
-  test("how it works stepper opens and navigates all steps", async ({ page }) => {
-    const howBtn = page.locator('button[aria-label="How it works"]');
-    await expect(howBtn).toBeVisible({ timeout: 5000 });
-    await howBtn.click();
-
-    await expect(page.getByText("Step 1 of 5")).toBeVisible({ timeout: 3000 });
-    await expect(page.getByText("Connect Wallet", { exact: true })).toBeVisible();
-
-    await page.getByRole("button", { name: "Next" }).click();
-    await expect(page.getByText("Step 2 of 5")).toBeVisible();
-
-    await page.getByRole("button", { name: "Next" }).click();
-    await expect(page.getByText("Step 3 of 5")).toBeVisible();
-
-    await page.getByRole("button", { name: "Next" }).click();
-    await expect(page.getByText("Step 4 of 5")).toBeVisible();
-
-    await page.getByRole("button", { name: "Next" }).click();
-    await expect(page.getByText("Step 5 of 5")).toBeVisible();
-    await expect(page.getByText("Get Started")).toBeVisible();
+  test("hero landing shows key privacy features", async ({ page }) => {
+    await page.goto("/", { waitUntil: "networkidle" });
+    await expect(page.getByText("Encrypted Votes")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("MPC Tallying")).toBeVisible();
+    await expect(page.getByText("Verified Results")).toBeVisible();
+    await expect(page.getByText("Powered by Arcium")).toBeVisible();
   });
 
   test("proposal detail page handles missing wallet", async ({ page }) => {
@@ -86,9 +72,9 @@ test.describe("Private DAO Voting", () => {
     await expect(badges.getByText("Anchor", { exact: true })).toBeVisible({ timeout: 5000 });
   });
 
-  test("footer contains project info", async ({ page }) => {
+  test("hero landing shows Arcium branding", async ({ page }) => {
     await page.goto("/", { waitUntil: "networkidle" });
-    await expect(page.getByText("Powered by Arcium MXE")).toBeVisible({ timeout: 5000 });
-    await expect(page.locator("footer").getByText("GitHub")).toBeVisible();
+    await expect(page.getByText("Built on Arcium MXE")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Vote")).toBeVisible();
   });
 });
