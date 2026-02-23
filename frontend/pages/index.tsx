@@ -360,6 +360,15 @@ export default function Home() {
     setVoteStep((s) => ({ ...s, [key]: "encrypting" }));
 
     try {
+      // Pre-validate: check voter holds the gate token before sending tx
+      const balance = tokenBalances[key] ?? 0;
+      if (balance < (proposal.minBalance?.toNumber?.() ?? 1)) {
+        throw new Error(
+          `InsufficientBalance: You need at least ${proposal.minBalance?.toNumber?.() ?? 1} gate token(s) to vote. ` +
+          `Use the faucet to claim tokens first.`
+        );
+      }
+
       let client = arciumClient;
       if (!client) {
         const provider = new AnchorProvider(connection, anchorWallet!, { commitment: "confirmed" });
