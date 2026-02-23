@@ -30,15 +30,6 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
-  {
-    id: "delegation",
-    label: "Delegation",
-    icon: (
-      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><path d="M20 8v6M23 11h-6" />
-      </svg>
-    ),
-  },
 ];
 
 const CAPACITY_COLORS: Record<string, string> = {
@@ -81,7 +72,12 @@ export function Sidebar({
         {NAV_ITEMS.map((item) => (
           <button
             key={item.id}
-            onClick={() => onNavigate?.(item.id)}
+            onClick={() => {
+              onNavigate?.(item.id);
+              const el = document.getElementById(`section-${item.id}`);
+              if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+              else window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
             className={`sidebar-nav-item w-full ${activeSection === item.id ? "active" : ""}`}
           >
             {item.icon}

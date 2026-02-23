@@ -48,10 +48,8 @@ export default async function handler(
     return res.status(500).json({ error: "Faucet not configured: missing GATE_MINT_AUTHORITY" });
   }
 
-  // Use the proposal's gate mint if provided, fall back to default
-  const gateMintStr = (typeof requestedMint === "string" && requestedMint.length > 0)
-    ? requestedMint
-    : process.env.NEXT_PUBLIC_GATE_MINT;
+  // Always use the configured gate mint — the authority keypair can only mint this token
+  const gateMintStr = process.env.NEXT_PUBLIC_GATE_MINT;
   if (!gateMintStr) {
     return res.status(500).json({ error: "Faucet not configured: missing NEXT_PUBLIC_GATE_MINT" });
   }
@@ -84,8 +82,6 @@ export default async function handler(
       : Buffer.from(authoritySecret, "base64").toString("utf-8");
     const secretKey = Uint8Array.from(JSON.parse(keyString));
     const mintAuthority = Keypair.fromSecretKey(secretKey);
-    // Zero the parsed secret key array after use
-    secretKey.fill(0);
     const gateMint = new PublicKey(gateMintStr);
 
     const connection = new Connection(

@@ -1,32 +1,149 @@
 {
+  "accounts": [
+    {
+      "discriminator": [
+        72,
+        30,
+        107,
+        96,
+        153,
+        32,
+        229,
+        22
+      ],
+      "name": "ComputationOffsetState"
+    },
+    {
+      "discriminator": [
+        26,
+        94,
+        189,
+        187,
+        116,
+        136,
+        53,
+        33
+      ],
+      "name": "Proposal"
+    },
+    {
+      "discriminator": [
+        126,
+        11,
+        29,
+        33,
+        32,
+        101,
+        239,
+        25
+      ],
+      "name": "Tally"
+    },
+    {
+      "discriminator": [
+        112,
+        9,
+        123,
+        165,
+        234,
+        9,
+        157,
+        167
+      ],
+      "name": "VoteRecord"
+    }
+  ],
   "address": "71tbXM3A2j5pKHfjtu1LYgY8jfQWuoZtHecDu6F6EPJH",
-  "metadata": {
-    "name": "private_dao_voting",
-    "version": "0.1.0",
-    "spec": "0.1.0",
-    "description": "Private DAO Voting with Arcium MXE"
-  },
+  "errors": [
+    {
+      "code": 6000,
+      "msg": "Voting has been closed",
+      "name": "VotingClosed"
+    },
+    {
+      "code": 6001,
+      "msg": "Voting period has ended",
+      "name": "VotingEnded"
+    },
+    {
+      "code": 6002,
+      "msg": "Voting period has not ended yet",
+      "name": "VotingNotEnded"
+    },
+    {
+      "code": 6003,
+      "msg": "Unauthorized",
+      "name": "Unauthorized"
+    },
+    {
+      "code": 6004,
+      "msg": "Already voted",
+      "name": "AlreadyVoted"
+    },
+    {
+      "code": 6005,
+      "msg": "Invalid token account for voter",
+      "name": "InvalidTokenAccount"
+    },
+    {
+      "code": 6006,
+      "msg": "Token mint does not match gate mint",
+      "name": "InvalidTokenMint"
+    },
+    {
+      "code": 6007,
+      "msg": "Insufficient token balance to vote",
+      "name": "InsufficientTokenBalance"
+    }
+  ],
+  "events": [
+    {
+      "discriminator": [
+        186,
+        8,
+        160,
+        108,
+        81,
+        13,
+        51,
+        206
+      ],
+      "name": "ProposalCreated"
+    },
+    {
+      "discriminator": [
+        99,
+        57,
+        60,
+        116,
+        62,
+        69,
+        96,
+        18
+      ],
+      "name": "ResultsRevealed"
+    },
+    {
+      "discriminator": [
+        39,
+        53,
+        195,
+        104,
+        188,
+        17,
+        225,
+        213
+      ],
+      "name": "VoteCast"
+    }
+  ],
   "instructions": [
     {
-      "name": "cast_vote",
-      "docs": [
-        "Cast an encrypted vote"
-      ],
-      "discriminator": [
-        20,
-        212,
-        15,
-        189,
-        69,
-        180,
-        69,
-        151
-      ],
       "accounts": [
         {
           "name": "voter",
-          "writable": true,
-          "signer": true
+          "signer": true,
+          "writable": true
         },
         {
           "name": "proposal",
@@ -41,7 +158,6 @@
         },
         {
           "name": "vote_record",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -69,7 +185,8 @@
                 "path": "voter"
               }
             ]
-          }
+          },
+          "writable": true
         },
         {
           "name": "sign_seed",
@@ -88,8 +205,8 @@
           }
         },
         {
-          "name": "arcium_program",
-          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ",
+          "name": "arcium_program"
         },
         {
           "name": "mxe_account"
@@ -118,7 +235,6 @@
         },
         {
           "name": "computation_offset_account",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -145,15 +261,16 @@
                 ]
               }
             ]
-          }
+          },
+          "writable": true
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "name": "token_program"
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
         }
       ],
       "args": [
@@ -184,32 +301,31 @@
             ]
           }
         }
-      ]
-    },
-    {
-      "name": "create_proposal",
-      "docs": [
-        "Create a new proposal and initialize encrypted tally"
       ],
       "discriminator": [
-        132,
-        116,
-        68,
-        174,
-        216,
-        160,
-        198,
-        22
+        20,
+        212,
+        15,
+        189,
+        69,
+        180,
+        69,
+        151
       ],
+      "docs": [
+        "Cast an encrypted vote"
+      ],
+      "name": "cast_vote"
+    },
+    {
       "accounts": [
         {
           "name": "authority",
-          "writable": true,
-          "signer": true
+          "signer": true,
+          "writable": true
         },
         {
           "name": "proposal",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -230,7 +346,8 @@
                 "path": "proposal_id"
               }
             ]
-          }
+          },
+          "writable": true
         },
         {
           "name": "sign_seed",
@@ -249,8 +366,8 @@
           }
         },
         {
-          "name": "arcium_program",
-          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ",
+          "name": "arcium_program"
         },
         {
           "name": "mxe_account"
@@ -279,7 +396,6 @@
         },
         {
           "name": "computation_offset_account",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -306,11 +422,12 @@
                 ]
               }
             ]
-          }
+          },
+          "writable": true
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
         }
       ],
       "args": [
@@ -342,88 +459,28 @@
           "name": "mxe_program_id",
           "type": "pubkey"
         }
-      ]
-    },
-    {
-      "name": "delegate_vote",
-      "docs": [
-        "Delegate voting power to another address",
-        "The delegator's token-gated vote weight is transferred to the delegate.",
-        "Delegators cannot vote directly while their delegation is active."
       ],
       "discriminator": [
-        12,
+        132,
         116,
-        204,
         68,
-        87,
-        205,
-        40,
-        205
+        174,
+        216,
+        160,
+        198,
+        22
       ],
-      "accounts": [
-        {
-          "name": "delegator",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "delegate"
-        },
-        {
-          "name": "delegation",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  100,
-                  101,
-                  108,
-                  101,
-                  103,
-                  97,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "delegator"
-              }
-            ]
-          }
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
+      "docs": [
+        "Create a new proposal and initialize encrypted tally"
       ],
-      "args": []
+      "name": "create_proposal"
     },
     {
-      "name": "dev_cast_vote",
-      "docs": [
-        "Dev mode: Cast vote without Arcium CPI (token gating still enforced)"
-      ],
-      "discriminator": [
-        12,
-        225,
-        12,
-        223,
-        112,
-        119,
-        184,
-        156
-      ],
       "accounts": [
         {
           "name": "voter",
-          "writable": true,
-          "signer": true
+          "signer": true,
+          "writable": true
         },
         {
           "name": "proposal",
@@ -438,7 +495,6 @@
         },
         {
           "name": "vote_record",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -466,15 +522,16 @@
                 "path": "voter"
               }
             ]
-          }
+          },
+          "writable": true
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "name": "token_program"
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
         }
       ],
       "args": [
@@ -505,32 +562,31 @@
             ]
           }
         }
-      ]
-    },
-    {
-      "name": "dev_create_proposal",
-      "docs": [
-        "Dev mode: Create a proposal without Arcium CPI"
       ],
       "discriminator": [
-        200,
-        116,
-        216,
-        152,
-        156,
-        252,
-        123,
-        37
+        12,
+        225,
+        12,
+        223,
+        112,
+        119,
+        184,
+        156
       ],
+      "docs": [
+        "Dev mode: Cast vote without Arcium CPI (token gating still enforced)"
+      ],
+      "name": "dev_cast_vote"
+    },
+    {
       "accounts": [
         {
           "name": "authority",
-          "writable": true,
-          "signer": true
+          "signer": true,
+          "writable": true
         },
         {
           "name": "proposal",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -551,11 +607,12 @@
                 "path": "proposal_id"
               }
             ]
-          }
+          },
+          "writable": true
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
         }
       ],
       "args": [
@@ -582,56 +639,35 @@
         {
           "name": "min_balance",
           "type": "u64"
-        },
-        {
-          "name": "quorum",
-          "type": "u64"
-        },
-        {
-          "name": "threshold_bps",
-          "type": "u16"
-        },
-        {
-          "name": "privacy_level",
-          "type": "u8"
-        },
-        {
-          "name": "discussion_url",
-          "type": "string"
-        },
-        {
-          "name": "execution_delay",
-          "type": "i64"
         }
-      ]
-    },
-    {
-      "name": "dev_init_tally",
-      "docs": [
-        "Dev mode: Initialize tally without Arcium callback"
       ],
       "discriminator": [
-        214,
-        131,
-        44,
-        237,
-        151,
-        139,
-        17,
-        35
+        200,
+        116,
+        216,
+        152,
+        156,
+        252,
+        123,
+        37
       ],
+      "docs": [
+        "Dev mode: Create a proposal without Arcium CPI"
+      ],
+      "name": "dev_create_proposal"
+    },
+    {
       "accounts": [
         {
           "name": "authority",
-          "writable": true,
-          "signer": true
+          "signer": true,
+          "writable": true
         },
         {
           "name": "proposal"
         },
         {
           "name": "tally",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -649,19 +685,55 @@
                 "path": "proposal"
               }
             ]
-          }
+          },
+          "writable": true
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
         }
       ],
-      "args": []
+      "args": [],
+      "discriminator": [
+        214,
+        131,
+        44,
+        237,
+        151,
+        139,
+        17,
+        35
+      ],
+      "docs": [
+        "Dev mode: Initialize tally without Arcium callback"
+      ],
+      "name": "dev_init_tally"
     },
     {
-      "name": "dev_reveal_results",
-      "docs": [
-        "Dev mode: Reveal results with provided counts (simulates MXE callback)"
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "yes_count",
+          "type": "u32"
+        },
+        {
+          "name": "no_count",
+          "type": "u32"
+        },
+        {
+          "name": "abstain_count",
+          "type": "u32"
+        }
       ],
       "discriminator": [
         169,
@@ -673,36 +745,28 @@
         17,
         244
       ],
+      "docs": [
+        "Dev mode: Reveal results with provided counts (simulates MXE callback)"
+      ],
+      "name": "dev_reveal_results"
+    },
+    {
       "accounts": [
         {
           "name": "authority",
-          "writable": true,
-          "signer": true
+          "signer": true,
+          "writable": true
         },
         {
-          "name": "proposal",
-          "writable": true
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
         }
       ],
       "args": [
         {
-          "name": "yes_count",
-          "type": "u64"
-        },
-        {
-          "name": "no_count",
-          "type": "u64"
-        },
-        {
-          "name": "abstain_count",
-          "type": "u64"
+          "name": "_comp_def_data",
+          "type": "bytes"
         }
-      ]
-    },
-    {
-      "name": "init_comp_def",
-      "docs": [
-        "Initialize computation definitions (called once at deployment)"
       ],
       "discriminator": [
         100,
@@ -714,48 +778,20 @@
         186,
         116
       ],
-      "accounts": [
-        {
-          "name": "authority",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
+      "docs": [
+        "Initialize computation definitions (called once at deployment)"
       ],
-      "args": [
-        {
-          "name": "_comp_def_data",
-          "type": "bytes"
-        }
-      ]
+      "name": "init_comp_def"
     },
     {
-      "name": "init_computation_offset",
-      "docs": [
-        "Initialize the computation offset PDA (one-time setup)"
-      ],
-      "discriminator": [
-        80,
-        107,
-        121,
-        65,
-        62,
-        92,
-        160,
-        91
-      ],
       "accounts": [
         {
           "name": "payer",
-          "writable": true,
-          "signer": true
+          "signer": true,
+          "writable": true
         },
         {
           "name": "computation_offset_account",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -782,30 +818,31 @@
                 ]
               }
             ]
-          }
+          },
+          "writable": true
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
         }
       ],
-      "args": []
+      "args": [],
+      "discriminator": [
+        80,
+        107,
+        121,
+        65,
+        62,
+        92,
+        160,
+        91
+      ],
+      "docs": [
+        "Initialize the computation offset PDA (one-time setup)"
+      ],
+      "name": "init_computation_offset"
     },
     {
-      "name": "init_tally_callback",
-      "docs": [
-        "Callback from Arcium after init_tally completes"
-      ],
-      "discriminator": [
-        156,
-        66,
-        122,
-        80,
-        120,
-        31,
-        153,
-        189
-      ],
       "accounts": [
         {
           "name": "proposal",
@@ -813,7 +850,6 @@
         },
         {
           "name": "tally",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -831,16 +867,17 @@
                 "path": "proposal"
               }
             ]
-          }
+          },
+          "writable": true
         },
         {
           "name": "payer",
-          "writable": true,
-          "signer": true
+          "signer": true,
+          "writable": true
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
         }
       ],
       "args": [
@@ -862,28 +899,28 @@
             ]
           }
         }
-      ]
-    },
-    {
-      "name": "reveal_results",
-      "docs": [
-        "Reveal the final vote results"
       ],
       "discriminator": [
-        111,
-        149,
-        62,
-        162,
-        102,
-        204,
-        225,
-        166
+        156,
+        66,
+        122,
+        80,
+        120,
+        31,
+        153,
+        189
       ],
+      "docs": [
+        "Callback from Arcium after init_tally completes"
+      ],
+      "name": "init_tally_callback"
+    },
+    {
       "accounts": [
         {
           "name": "authority",
-          "writable": true,
-          "signer": true
+          "signer": true,
+          "writable": true
         },
         {
           "name": "proposal",
@@ -909,8 +946,8 @@
           }
         },
         {
-          "name": "arcium_program",
-          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ"
+          "address": "Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ",
+          "name": "arcium_program"
         },
         {
           "name": "mxe_account"
@@ -939,7 +976,6 @@
         },
         {
           "name": "computation_offset_account",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -966,20 +1002,58 @@
                 ]
               }
             ]
-          }
+          },
+          "writable": true
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
         }
       ],
-      "args": []
+      "args": [],
+      "discriminator": [
+        111,
+        149,
+        62,
+        162,
+        102,
+        204,
+        225,
+        166
+      ],
+      "docs": [
+        "Reveal the final vote results"
+      ],
+      "name": "reveal_results"
     },
     {
-      "name": "reveal_results_callback",
-      "docs": [
-        "Callback from Arcium with revealed results",
-        "Only callable by the Arcium program via CPI (validated by signer constraint)"
+      "accounts": [
+        {
+          "name": "proposal",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "yes_count",
+          "type": "u32"
+        },
+        {
+          "name": "no_count",
+          "type": "u32"
+        },
+        {
+          "name": "abstain_count",
+          "type": "u32"
+        },
+        {
+          "name": "total_votes",
+          "type": "u32"
+        },
+        {
+          "name": "winner",
+          "type": "u8"
+        }
       ],
       "discriminator": [
         3,
@@ -991,114 +1065,12 @@
         135,
         115
       ],
-      "accounts": [
-        {
-          "name": "proposal",
-          "writable": true
-        },
-        {
-          "name": "sign_seed",
-          "signer": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  105,
-                  103,
-                  110
-                ]
-              }
-            ]
-          }
-        }
+      "docs": [
+        "Callback from Arcium with revealed results"
       ],
-      "args": [
-        {
-          "name": "yes_count",
-          "type": "u64"
-        },
-        {
-          "name": "no_count",
-          "type": "u64"
-        },
-        {
-          "name": "abstain_count",
-          "type": "u64"
-        },
-        {
-          "name": "total_votes",
-          "type": "u64"
-        }
-      ]
+      "name": "reveal_results_callback"
     },
     {
-      "name": "revoke_delegation",
-      "docs": [
-        "Revoke a previously created delegation"
-      ],
-      "discriminator": [
-        188,
-        92,
-        135,
-        67,
-        160,
-        181,
-        54,
-        62
-      ],
-      "accounts": [
-        {
-          "name": "delegator",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "delegation",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  100,
-                  101,
-                  108,
-                  101,
-                  103,
-                  97,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "delegator"
-              }
-            ]
-          }
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "vote_callback",
-      "docs": [
-        "Callback from Arcium after vote computation completes"
-      ],
-      "discriminator": [
-        129,
-        42,
-        124,
-        58,
-        180,
-        43,
-        128,
-        155
-      ],
       "accounts": [
         {
           "name": "proposal",
@@ -1107,23 +1079,6 @@
         {
           "name": "tally",
           "writable": true
-        },
-        {
-          "name": "sign_seed",
-          "signer": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  105,
-                  103,
-                  110
-                ]
-              }
-            ]
-          }
         }
       ],
       "args": [
@@ -1145,292 +1100,45 @@
             ]
           }
         }
-      ]
-    }
-  ],
-  "accounts": [
-    {
-      "name": "ComputationOffsetState",
+      ],
       "discriminator": [
-        72,
-        30,
-        107,
-        96,
-        153,
-        32,
-        229,
-        22
-      ]
-    },
-    {
-      "name": "Delegation",
-      "discriminator": [
-        237,
-        90,
-        140,
-        159,
+        129,
+        42,
         124,
-        255,
-        243,
-        80
-      ]
-    },
-    {
-      "name": "Proposal",
-      "discriminator": [
-        26,
-        94,
-        189,
-        187,
-        116,
-        136,
-        53,
-        33
-      ]
-    },
-    {
-      "name": "Tally",
-      "discriminator": [
-        126,
-        11,
-        29,
-        33,
-        32,
-        101,
-        239,
-        25
-      ]
-    },
-    {
-      "name": "VoteRecord",
-      "discriminator": [
-        112,
-        9,
-        123,
-        165,
-        234,
-        9,
-        157,
-        167
-      ]
+        58,
+        180,
+        43,
+        128,
+        155
+      ],
+      "docs": [
+        "Callback from Arcium after vote computation completes"
+      ],
+      "name": "vote_callback"
     }
   ],
-  "events": [
-    {
-      "name": "DelegationRevoked",
-      "discriminator": [
-        59,
-        158,
-        142,
-        49,
-        164,
-        116,
-        220,
-        8
-      ]
-    },
-    {
-      "name": "ProposalCreated",
-      "discriminator": [
-        186,
-        8,
-        160,
-        108,
-        81,
-        13,
-        51,
-        206
-      ]
-    },
-    {
-      "name": "ResultsRevealed",
-      "discriminator": [
-        99,
-        57,
-        60,
-        116,
-        62,
-        69,
-        96,
-        18
-      ]
-    },
-    {
-      "name": "VoteCast",
-      "discriminator": [
-        39,
-        53,
-        195,
-        104,
-        188,
-        17,
-        225,
-        213
-      ]
-    },
-    {
-      "name": "VoteDelegated",
-      "discriminator": [
-        108,
-        148,
-        160,
-        229,
-        235,
-        105,
-        132,
-        52
-      ]
-    }
-  ],
-  "errors": [
-    {
-      "code": 6000,
-      "name": "VotingClosed",
-      "msg": "Voting has been closed"
-    },
-    {
-      "code": 6001,
-      "name": "VotingEnded",
-      "msg": "Voting period has ended"
-    },
-    {
-      "code": 6002,
-      "name": "VotingNotEnded",
-      "msg": "Voting period has not ended yet"
-    },
-    {
-      "code": 6003,
-      "name": "Unauthorized",
-      "msg": "Unauthorized"
-    },
-    {
-      "code": 6004,
-      "name": "AlreadyVoted",
-      "msg": "Already voted"
-    },
-    {
-      "code": 6005,
-      "name": "InvalidTokenAccount",
-      "msg": "Invalid token account for voter"
-    },
-    {
-      "code": 6006,
-      "name": "InvalidTokenMint",
-      "msg": "Token mint does not match gate mint"
-    },
-    {
-      "code": 6007,
-      "name": "InsufficientTokenBalance",
-      "msg": "Insufficient token balance to vote"
-    },
-    {
-      "code": 6008,
-      "name": "QuorumNotReached",
-      "msg": "Quorum not reached: not enough votes cast"
-    },
-    {
-      "code": 6009,
-      "name": "ActiveDelegation",
-      "msg": "Cannot vote directly while delegation is active"
-    },
-    {
-      "code": 6010,
-      "name": "ArithmeticOverflow",
-      "msg": "Arithmetic overflow in vote tally"
-    },
-    {
-      "code": 6011,
-      "name": "VoteTallyMismatch",
-      "msg": "Vote tally mismatch: yes + no + abstain != total"
-    },
-    {
-      "code": 6012,
-      "name": "InvalidThreshold",
-      "msg": "Invalid threshold: must be between 1 and 10000 basis points"
-    },
-    {
-      "code": 6013,
-      "name": "InvalidPrivacyLevel",
-      "msg": "Invalid privacy level: must be 0 (Full), 1 (Partial), or 2 (Transparent)"
-    },
-    {
-      "code": 6014,
-      "name": "InvalidExecutionDelay",
-      "msg": "Invalid execution delay: must be non-negative"
-    },
-    {
-      "code": 6015,
-      "name": "ThresholdNotMet",
-      "msg": "Threshold not met: YES votes below required percentage"
-    },
-    {
-      "code": 6016,
-      "name": "DepositAlreadyProcessed",
-      "msg": "Deposit already processed"
-    },
-    {
-      "code": 6017,
-      "name": "NotYetRevealed",
-      "msg": "Results not yet revealed"
-    }
-  ],
+  "metadata": {
+    "description": "Private DAO Voting with Arcium MXE",
+    "name": "private_dao_voting",
+    "spec": "0.1.0",
+    "version": "0.1.0"
+  },
   "types": [
     {
       "name": "ComputationOffsetState",
       "type": {
-        "kind": "struct",
         "fields": [
           {
             "name": "bump",
             "type": "u8"
           }
-        ]
-      }
-    },
-    {
-      "name": "Delegation",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "delegator",
-            "type": "pubkey"
-          },
-          {
-            "name": "delegate",
-            "type": "pubkey"
-          },
-          {
-            "name": "created_at",
-            "type": "i64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "DelegationRevoked",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "delegator",
-            "type": "pubkey"
-          },
-          {
-            "name": "delegate",
-            "type": "pubkey"
-          }
-        ]
+        ],
+        "kind": "struct"
       }
     },
     {
       "name": "Proposal",
       "type": {
-        "kind": "struct",
         "fields": [
           {
             "name": "id",
@@ -1462,7 +1170,7 @@
           },
           {
             "name": "total_votes",
-            "type": "u64"
+            "type": "u32"
           },
           {
             "name": "gate_mint",
@@ -1478,90 +1186,27 @@
           },
           {
             "name": "yes_votes",
-            "type": "u64"
+            "type": "u32"
           },
           {
             "name": "no_votes",
-            "type": "u64"
+            "type": "u32"
           },
           {
             "name": "abstain_votes",
-            "type": "u64"
-          },
-          {
-            "name": "quorum",
-            "docs": [
-              "Minimum number of votes required for the result to be valid (0 = no quorum)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "threshold_bps",
-            "docs": [
-              "V2: Passing threshold in basis points (e.g., 5001 = simple majority)"
-            ],
-            "type": "u16"
-          },
-          {
-            "name": "privacy_level",
-            "docs": [
-              "V2: Privacy level (0 = Full, 1 = Partial, 2 = Transparent)"
-            ],
-            "type": "u8"
-          },
-          {
-            "name": "passed",
-            "docs": [
-              "V2: Whether the proposal passed its threshold check"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "discussion_url",
-            "docs": [
-              "V2: Optional discussion URL"
-            ],
-            "type": "string"
-          },
-          {
-            "name": "deposit_amount",
-            "docs": [
-              "V2: Deposit amount locked by creator"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "deposit_returned",
-            "docs": [
-              "V2: Whether the deposit has been returned or slashed"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "execution_delay",
-            "docs": [
-              "V2: Execution delay in seconds after reveal"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "executed",
-            "docs": [
-              "V2: Whether the payload has been executed"
-            ],
-            "type": "bool"
+            "type": "u32"
           },
           {
             "name": "bump",
             "type": "u8"
           }
-        ]
+        ],
+        "kind": "struct"
       }
     },
     {
       "name": "ProposalCreated",
       "type": {
-        "kind": "struct",
         "fields": [
           {
             "name": "proposal_id",
@@ -1575,13 +1220,13 @@
             "name": "voting_ends_at",
             "type": "i64"
           }
-        ]
+        ],
+        "kind": "struct"
       }
     },
     {
       "name": "ResultsRevealed",
       "type": {
-        "kind": "struct",
         "fields": [
           {
             "name": "proposal",
@@ -1589,31 +1234,31 @@
           },
           {
             "name": "yes_votes",
-            "type": "u64"
+            "type": "u32"
           },
           {
             "name": "no_votes",
-            "type": "u64"
+            "type": "u32"
           },
           {
             "name": "abstain_votes",
-            "type": "u64"
+            "type": "u32"
           },
           {
             "name": "total_votes",
-            "type": "u64"
+            "type": "u32"
           },
           {
             "name": "winner",
             "type": "u8"
           }
-        ]
+        ],
+        "kind": "struct"
       }
     },
     {
       "name": "Tally",
       "type": {
-        "kind": "struct",
         "fields": [
           {
             "name": "proposal",
@@ -1641,13 +1286,13 @@
             "name": "bump",
             "type": "u8"
           }
-        ]
+        ],
+        "kind": "struct"
       }
     },
     {
       "name": "VoteCast",
       "type": {
-        "kind": "struct",
         "fields": [
           {
             "name": "proposal",
@@ -1657,29 +1302,13 @@
             "name": "voter",
             "type": "pubkey"
           }
-        ]
-      }
-    },
-    {
-      "name": "VoteDelegated",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "delegator",
-            "type": "pubkey"
-          },
-          {
-            "name": "delegate",
-            "type": "pubkey"
-          }
-        ]
+        ],
+        "kind": "struct"
       }
     },
     {
       "name": "VoteRecord",
       "type": {
-        "kind": "struct",
         "fields": [
           {
             "name": "proposal",
@@ -1724,7 +1353,8 @@
             "name": "bump",
             "type": "u8"
           }
-        ]
+        ],
+        "kind": "struct"
       }
     }
   ]

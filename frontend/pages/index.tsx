@@ -16,9 +16,6 @@ import {
   devCastVote,
   castVoteWithArcium,
   devRevealResults,
-  delegateVote,
-  revokeDelegation,
-  getDelegation,
 } from "../lib/contract";
 import {
   ArciumClient,
@@ -72,9 +69,6 @@ export default function Home() {
   const [isEncrypting, setIsEncrypting] = useState(false);
   const [tokenBalances, setTokenBalances] = useState<Record<string, number>>({});
   const [claiming, setClaiming] = useState<Record<string, boolean>>({});
-  const [delegation, setDelegation] = useState<{ delegate: PublicKey; createdAt: number } | null>(null);
-  const [delegateInput, setDelegateInput] = useState("");
-  const [delegating, setDelegating] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [voteStep, setVoteStep] = useState<Record<string, VoteStep>>({});
@@ -82,6 +76,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [devConsoleOpen, setDevConsoleOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("dashboard");
 
   // Dev mode: track local vote tallies since MXE isn't aggregating
   const [devTallies, setDevTallies] = useState<Record<string, { yes: number; no: number; abstain: number }>>(() => {
@@ -89,10 +84,7 @@ export default function Home() {
     try { return JSON.parse(localStorage.getItem("devTallies") || "{}"); } catch { return {}; }
   });
 
-  const [hiddenProposals, setHiddenProposals] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set();
-    try { return new Set(JSON.parse(localStorage.getItem("hiddenProposals") || "[]")); } catch { return new Set(); }
-  });
+  const [hiddenProposals, setHiddenProposals] = useState<Set<string>>(new Set());
 
   const toggleHideProposal = (key: string) => {
     setHiddenProposals((prev) => {
@@ -200,19 +192,20 @@ export default function Home() {
             yesVotes: Number(a.yesVotes ?? a.yes_votes ?? 0),
             noVotes: Number(a.noVotes ?? a.no_votes ?? 0),
             abstainVotes: Number(a.abstainVotes ?? a.abstain_votes ?? 0),
-            quorum: Number(a.quorum ?? 0),
-            thresholdBps: Number(a.thresholdBps ?? a.threshold_bps ?? 5001),
-            privacyLevel: Number(a.privacyLevel ?? a.privacy_level ?? 0),
-            passed: a.passed ?? false,
-            discussionUrl: a.discussionUrl ?? a.discussion_url ?? "",
-            depositAmount: Number(a.depositAmount ?? a.deposit_amount ?? 0),
-            executionDelay: Number(a.executionDelay ?? a.execution_delay ?? 0),
-            executed: a.executed ?? false,
           });
         } catch {
           console.warn("Skipping undeserializable proposal account:", raw.pubkey.toBase58());
         }
       }
+      // Sort: active proposals first, then newest to oldest within each group
+      mapped.sort((a, b) => {
+        const aActive = a.isActive && !a.isRevealed ? 1 : 0;
+        const bActive = b.isActive && !b.isRevealed ? 1 : 0;
+        if (aActive !== bActive) return bActive - aActive;
+        const aId = BN.isBN(a.id) ? a.id : new BN(a.id.toString());
+        const bId = BN.isBN(b.id) ? b.id : new BN(b.id.toString());
+        return bId.cmp(aId);
+      });
       setProposals(mapped);
       checkTokenBalances(mapped);
 
@@ -267,7 +260,6 @@ export default function Home() {
       setVoted({});
       setSelected({});
       setTokenBalances({});
-      setDelegation(null);
       load();
       setWasConnected(true);
     } else {
@@ -278,48 +270,9 @@ export default function Home() {
       setVoted({});
       setSelected({});
       setTokenBalances({});
-      setDelegation(null);
       setCurrentPage(1);
     }
   }, [connected, anchorWallet, publicKey, load]);
-
-  // Check delegation status
-  useEffect(() => {
-    if (!publicKey || !connected) { setDelegation(null); return; }
-    const program = getProgram();
-    if (!program) return;
-    getDelegation(program, publicKey).then(setDelegation);
-  }, [publicKey, connected, getProgram]);
-
-  const handleDelegate = async () => {
-    const program = getProgram();
-    if (!program || !publicKey || !delegateInput.trim()) return;
-    setDelegating(true);
-    try {
-      const delegate = new PublicKey(delegateInput.trim());
-      const txSig = await delegateVote(program, publicKey, delegate);
-      setDelegation({ delegate, createdAt: Math.floor(Date.now() / 1000) });
-      setDelegateInput("");
-      setToast({ message: "Vote delegation active!", type: "success", txUrl: explorerTxUrl(txSig) });
-    } catch (e: any) {
-      setToast({ message: parseAnchorError(e), type: "error" });
-    }
-    setDelegating(false);
-  };
-
-  const handleRevoke = async () => {
-    const program = getProgram();
-    if (!program || !publicKey) return;
-    setDelegating(true);
-    try {
-      const txSig = await revokeDelegation(program, publicKey);
-      setDelegation(null);
-      setToast({ message: "Delegation revoked", type: "success", txUrl: explorerTxUrl(txSig) });
-    } catch (e: any) {
-      setToast({ message: parseAnchorError(e), type: "error" });
-    }
-    setDelegating(false);
-  };
 
   // Create proposal
   const create = async (
@@ -327,12 +280,7 @@ export default function Home() {
     desc: string,
     duration: number,
     gateMintStr: string,
-    minBalanceStr: string,
-    quorumStr: string,
-    thresholdBps: number,
-    privacyLevel: number,
-    discussionUrl: string,
-    executionDelay: number
+    minBalanceStr: string
   ) => {
     const program = getProgram();
     if (!program || !publicKey) return;
@@ -340,10 +288,8 @@ export default function Home() {
     try {
       const gateMint = new PublicKey(gateMintStr);
       const minBalance = new BN(minBalanceStr);
-      const quorum = new BN(quorumStr || "0");
       const result = await withRetry(() => devCreateProposal(
-        program, publicKey, title, desc, duration, gateMint, minBalance, quorum,
-        thresholdBps, privacyLevel, discussionUrl, executionDelay
+        program, publicKey, title, desc, duration, gateMint, minBalance
       ));
       await withRetry(() => devInitTally(program, publicKey, result.proposalPDA));
       setToast({ message: "Proposal created with tally initialized!", type: "success", txUrl: explorerTxUrl(result.tx) });
@@ -595,6 +541,8 @@ export default function Home() {
             <Sidebar
               arciumClient={arciumClient}
               connected={connected}
+              activeSection={activeSection}
+              onNavigate={setActiveSection}
               onOpenDrawer={() => setDrawerOpen(true)}
             />
           }
@@ -613,44 +561,6 @@ export default function Home() {
                 </svg>
                 Create Proposal
               </button>
-
-              {/* Delegation Panel */}
-              <div className="glass-card-elevated p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-                    <svg className="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><path d="M20 8v6M23 11h-6" />
-                    </svg>
-                  </div>
-                  <h3 className="text-sm font-semibold text-white">Vote Delegation</h3>
-                </div>
-                {delegation ? (
-                  <div className="space-y-3">
-                    <div className="bg-cyan-500/5 border border-cyan-500/10 rounded-xl p-3">
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Delegated to</p>
-                      <p className="text-xs text-cyan-400 font-mono">{delegation.delegate.toString().slice(0, 12)}...{delegation.delegate.toString().slice(-4)}</p>
-                    </div>
-                    <button onClick={handleRevoke} disabled={delegating}
-                      className="w-full py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl text-xs hover:bg-red-500/20 transition-all disabled:opacity-50">
-                      {delegating ? "Revoking..." : "Revoke Delegation"}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <input
-                      value={delegateInput}
-                      onChange={(e) => setDelegateInput(e.target.value)}
-                      placeholder="Enter delegate wallet address"
-                      className="w-full px-3 py-2.5 bg-white/3 border border-white/8 rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30 transition-colors"
-                    />
-                    <button onClick={handleDelegate} disabled={delegating || !delegateInput.trim()}
-                      className="w-full py-2.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-xl text-xs font-medium hover:bg-cyan-500/20 transition-all disabled:opacity-50">
-                      {delegating ? "Delegating..." : "Delegate Votes"}
-                    </button>
-                  </div>
-                )}
-                <p className="text-[10px] text-gray-600 mt-2 leading-relaxed">Delegate your voting power to a trusted address on-chain.</p>
-              </div>
 
               {/* Activity Feed */}
               {!loading && proposals.length > 0 && (
@@ -696,7 +606,7 @@ export default function Home() {
           </div>
 
           {/* Main scrollable content */}
-          <div className="px-6 py-6 space-y-6" role="main" aria-label="Governance proposals">
+          <div id="section-dashboard" className="px-6 py-6 space-y-6" role="main" aria-label="Governance proposals">
             {/* Action bar */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
@@ -755,7 +665,7 @@ export default function Home() {
               </div>
             )}
 
-            <div className="space-y-4">
+            <div id="section-proposals" className="space-y-4">
               {paginatedProposals.map((p) => {
                 const key = p.publicKey.toString();
                 return (

@@ -96,12 +96,7 @@ export async function devCreateProposal(
         description,
         votingEndsAt,
         gateMint,
-        minBalance,
-        quorum,
-        thresholdBps,
-        privacyLevel,
-        discussionUrl,
-        new BN(executionDelay)
+        minBalance
       )
       .accounts({
         authority,

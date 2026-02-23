@@ -27,3 +27,4 @@ Thumbs.db
 # Tools
 arcup.exe
 .vercel
+.env*.local
