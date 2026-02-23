@@ -175,6 +175,9 @@ export function ProposalCard({
         <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title="Cerberus MPC: secure even if N-1 of N nodes are malicious">
           Cerberus Protected
         </span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center gap-1" title="Votes processed in Shared Private State">
+          <LockIcon className="w-2.5 h-2.5" /> Shielded
+        </span>
         <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
           {PRIVACY_LABELS[p.privacyLevel] || "Full Privacy"}
         </span>
@@ -298,7 +301,7 @@ export function ProposalCard({
             <div className="relative flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ShieldCheckIcon className={`w-5 h-5 text-cyan-400 ${isVoting ? "animate-pulse" : "animate-pulse-slow"}`} />
-                <span className="text-gray-300">{total} vote{total !== 1 ? "s" : ""} sealed</span>
+                <span className={`text-gray-300 ${isVoting ? "data-mask-animation" : ""}`}>{total} vote{total !== 1 ? "s" : ""} sealed</span>
               </div>
               <LockIcon className="w-4 h-4 text-cyan-400/50" />
             </div>
