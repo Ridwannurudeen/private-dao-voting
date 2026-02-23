@@ -105,7 +105,11 @@ export default function Home() {
 
   const getProgram = useCallback(() => {
     if (!anchorWallet) return null;
-    const provider = new AnchorProvider(connection, anchorWallet, { commitment: "confirmed" });
+    const provider = new AnchorProvider(connection, anchorWallet, {
+      commitment: "confirmed",
+      skipPreflight: true,
+      preflightCommitment: "processed",
+    });
     return new Program(generatedIdl as unknown as Idl, provider);
   }, [connection, anchorWallet]);
 
@@ -331,11 +335,11 @@ export default function Home() {
       const gateMint = new PublicKey(gateMintStr);
       const minBalance = new BN(minBalanceStr);
       const quorum = new BN(quorumStr || "0");
-      const result = await devCreateProposal(
+      const result = await withRetry(() => devCreateProposal(
         program, publicKey, title, desc, duration, gateMint, minBalance, quorum,
         thresholdBps, privacyLevel, discussionUrl, executionDelay
-      );
-      await devInitTally(program, publicKey, result.proposalPDA);
+      ));
+      await withRetry(() => devInitTally(program, publicKey, result.proposalPDA));
       setToast({ message: "Proposal created with tally initialized!", type: "success", txUrl: explorerTxUrl(result.tx) });
       setModal(false);
       load();

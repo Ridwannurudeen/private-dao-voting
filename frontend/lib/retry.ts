@@ -19,11 +19,14 @@ export async function withRetry<T>(
       const msg = error?.message || error?.toString() || "";
 
       // Don't retry user rejections or Anchor program errors
+      const isBlockhashIssue =
+        msg.includes("Blockhash not found") || msg.includes("blockhash not found");
       if (
-        msg.includes("User rejected") ||
-        msg.includes("Transaction cancelled") ||
-        msg.includes("Simulation failed") ||
-        msg.includes("custom program error")
+        !isBlockhashIssue &&
+        (msg.includes("User rejected") ||
+          msg.includes("Transaction cancelled") ||
+          msg.includes("Simulation failed") ||
+          msg.includes("custom program error"))
       ) {
         throw error;
       }
