@@ -109,14 +109,6 @@ export default function ProposalDetail() {
         yesVotes: Number(a.yesVotes ?? a.yes_votes ?? 0),
         noVotes: Number(a.noVotes ?? a.no_votes ?? 0),
         abstainVotes: Number(a.abstainVotes ?? a.abstain_votes ?? 0),
-        quorum: Number(a.quorum ?? 0),
-        thresholdBps: Number(a.thresholdBps ?? a.threshold_bps ?? 5001),
-        privacyLevel: Number(a.privacyLevel ?? a.privacy_level ?? 0),
-        passed: a.passed ?? false,
-        discussionUrl: a.discussionUrl ?? a.discussion_url ?? "",
-        depositAmount: Number(a.depositAmount ?? a.deposit_amount ?? 0),
-        executionDelay: Number(a.executionDelay ?? a.execution_delay ?? 0),
-        executed: a.executed ?? false,
       };
       setProposal(p);
 

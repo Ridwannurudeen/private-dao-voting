@@ -9,8 +9,6 @@ import { ExportResults } from "./ExportResults";
 import { EncryptionAnimation } from "./EncryptionAnimation";
 import { VoteProgress, VoteStep } from "./VoteProgress";
 
-const PRIVACY_LABELS = ["Full Privacy", "Partial Privacy", "Transparent Tally"];
-
 export interface Proposal {
   publicKey: PublicKey;
   id: BN;
@@ -26,14 +24,6 @@ export interface Proposal {
   yesVotes: number;
   noVotes: number;
   abstainVotes: number;
-  quorum: number;
-  thresholdBps: number;
-  privacyLevel: number;
-  passed: boolean;
-  discussionUrl: string;
-  depositAmount: number;
-  executionDelay: number;
-  executed: boolean;
 }
 
 function formatTime(secondsRemaining: number): string {
@@ -170,7 +160,7 @@ export function ProposalCard({
         </ReactMarkdown>
       </div>
 
-      {/* V2 badges */}
+      {/* Badges */}
       <div className="flex flex-wrap gap-2 mb-3">
         <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title="Cerberus MPC: secure even if N-1 of N nodes are malicious">
           Cerberus Protected
@@ -178,32 +168,10 @@ export function ProposalCard({
         <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center gap-1" title="Votes processed in Shared Private State">
           <LockIcon className="w-2.5 h-2.5" /> Shielded
         </span>
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
-          {PRIVACY_LABELS[p.privacyLevel] || "Full Privacy"}
-        </span>
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-          Threshold: {(p.thresholdBps / 100).toFixed(1)}%
-        </span>
-        {p.executionDelay > 0 && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
-            Timelock: {p.executionDelay >= 86400 ? `${Math.floor(p.executionDelay / 86400)}d` : p.executionDelay >= 3600 ? `${Math.floor(p.executionDelay / 3600)}h` : `${p.executionDelay}s`}
-          </span>
-        )}
-        {p.discussionUrl && (
-          <a
-            href={p.discussionUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
-          >
-            Discussion &rarr;
-          </a>
-        )}
       </div>
 
       <p className="text-xs text-gray-400 mb-4 break-all sm:break-normal">
         Gate: {p.gateMint.toString().slice(0, 8)}... | Min balance: {p.minBalance.toString()} | Votes: {total}
-        {p.quorum > 0 && (<> | Quorum: {total}/{p.quorum} {total >= p.quorum ? <span className="text-green-400">met</span> : <span className="text-yellow-400">not met</span>}</>)}
       </p>
 
       {/* Token gate check: show claim when ATA missing (balance=-1) or below minimum */}
@@ -273,15 +241,6 @@ export function ProposalCard({
       {/* Results */}
       {p.isRevealed && total > 0 && (
         <div className="mt-4 pt-4 border-t border-white/10">
-          {/* Pass/Fail badge */}
-          <div className="flex items-center justify-center mb-3">
-            <span className={`px-4 py-1.5 rounded-full text-sm font-semibold ${p.passed ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"}`}>
-              {p.passed ? "Passed" : "Did Not Pass"}
-              <span className="text-xs ml-1 opacity-70">
-                ({(p.thresholdBps / 100).toFixed(1)}% threshold)
-              </span>
-            </span>
-          </div>
           <div className="flex flex-wrap justify-between text-sm mb-2 gap-1">
             <span className="text-green-400">Yes: {yes} ({yesPct}%)</span>
             <span className="text-red-400">No: {no} ({noPct}%)</span>
