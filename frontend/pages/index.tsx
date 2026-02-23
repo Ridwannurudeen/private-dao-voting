@@ -210,16 +210,19 @@ export default function Home() {
       checkTokenBalances(mapped);
 
       if (publicKey) {
+        const results = await Promise.all(
+          mapped.map(async (p) => {
+            try {
+              const [pda] = findVoteRecordPDA(p.publicKey, publicKey);
+              await (program.account as any).voteRecord.fetch(pda);
+              return { key: p.publicKey.toString(), voted: true };
+            } catch {
+              return { key: p.publicKey.toString(), voted: false };
+            }
+          })
+        );
         const v: Record<string, boolean> = {};
-        for (const p of mapped) {
-          try {
-            const [pda] = findVoteRecordPDA(p.publicKey, publicKey);
-            await (program.account as any).voteRecord.fetch(pda);
-            v[p.publicKey.toString()] = true;
-          } catch {
-            v[p.publicKey.toString()] = false;
-          }
-        }
+        for (const r of results) v[r.key] = r.voted;
         setVoted(v);
       }
     } catch (e: any) {
