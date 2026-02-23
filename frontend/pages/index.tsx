@@ -57,7 +57,24 @@ export default function Home() {
 
   const [modal, setModal] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
-  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [proposals, setProposals] = useState<Proposal[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const cached = sessionStorage.getItem("cachedProposals");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // Rehydrate PublicKey and BN objects
+        return parsed.map((p: any) => ({
+          ...p,
+          publicKey: new PublicKey(p.publicKey),
+          id: new BN(p.id),
+          authority: new PublicKey(p.authority),
+          gateMint: new PublicKey(p.gateMint),
+        }));
+      }
+    } catch {}
+    return [];
+  });
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [voting, setVoting] = useState<Record<string, boolean>>({});
@@ -167,7 +184,8 @@ export default function Home() {
   const load = useCallback(async () => {
     const program = getProgram();
     if (!program) return;
-    setLoading(true);
+    // Only show loading skeleton if we have no cached proposals to display
+    if (proposals.length === 0) setLoading(true);
     try {
       const discriminatorFilter: GetProgramAccountsFilter = {
         memcmp: {
@@ -177,7 +195,10 @@ export default function Home() {
         },
       };
 
-      const rawAccounts = await connection.getProgramAccounts(PROGRAM_ID, { filters: [discriminatorFilter] });
+      const rawAccounts = await connection.getProgramAccounts(PROGRAM_ID, {
+        filters: [discriminatorFilter],
+        commitment: "processed",
+      });
 
       const mapped: Proposal[] = [];
       for (const raw of rawAccounts) {
@@ -215,6 +236,18 @@ export default function Home() {
       // Show proposals immediately — don't wait for vote records or balances
       setProposals(mapped);
       setLoading(false);
+
+      // Cache for instant display on next visit
+      try {
+        const serializable = mapped.map((p) => ({
+          ...p,
+          publicKey: p.publicKey.toString(),
+          id: p.id.toString(),
+          authority: p.authority.toString(),
+          gateMint: p.gateMint.toString(),
+        }));
+        sessionStorage.setItem("cachedProposals", JSON.stringify(serializable));
+      } catch {}
 
       // Load vote records and token balances in parallel (background)
       if (publicKey) {
