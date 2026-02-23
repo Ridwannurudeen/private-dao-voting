@@ -13,6 +13,27 @@ const ERROR_MAP: Record<string, string> = {
 export function parseAnchorError(error: any): string {
   const msg = error?.message || error?.toString() || "Unknown error";
 
+  // Anchor 0.32 + web3.js 1.98 API mismatch: SendTransactionError constructor
+  // receives positional args but expects an object, producing "Unknown action 'undefined'".
+  // Try to extract the real error from logs or the original error.
+  if (msg.includes("Unknown action")) {
+    // Check if the error has transaction logs attached
+    const logs: string[] | undefined = error?.logs || error?.transactionLogs;
+    if (logs && logs.length > 0) {
+      const programError = logs.find((l: string) =>
+        l.includes("Error") || l.includes("failed") || l.includes("custom program error")
+      );
+      if (programError) {
+        // Try to match known errors from the log line
+        for (const [key, friendly] of Object.entries(ERROR_MAP)) {
+          if (programError.includes(key)) return friendly;
+        }
+        return programError.replace(/^Program log: /, "").slice(0, 120);
+      }
+    }
+    return "Transaction failed. Check your token balance and try again.";
+  }
+
   // Check for known Anchor error names
   for (const [key, friendly] of Object.entries(ERROR_MAP)) {
     if (msg.includes(key)) return friendly;

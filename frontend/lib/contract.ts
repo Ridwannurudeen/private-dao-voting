@@ -15,6 +15,26 @@ export const DEFAULT_GATE_MINT = new PublicKey(
 // during simulation. Skip preflight to send directly to the validator.
 const TX_OPTS = { skipPreflight: true, commitment: "confirmed" as const };
 
+// Anchor 0.32 calls `new SendTransactionError(msg, logs)` (positional),
+// but @solana/web3.js >=1.95 expects `{ action, signature, transactionMessage, logs }`.
+// This mismatch produces "Unknown action 'undefined'" and loses the real error.
+// Wrapper to catch and re-throw with the original error info preserved.
+async function rpcWithErrorFix<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err: any) {
+    const msg = err?.message || "";
+    if (msg.includes("Unknown action")) {
+      const wrapped = new Error(
+        err?.transactionMessage || "Transaction failed on-chain. Check account state and token balance."
+      );
+      (wrapped as any).logs = err?.logs || err?.transactionLogs;
+      throw wrapped;
+    }
+    throw err;
+  }
+}
+
 // PDA helpers
 export function findProposalPDA(proposalId: BN): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
@@ -68,26 +88,28 @@ export async function devCreateProposal(
   const [proposalPDA] = findProposalPDA(proposalId);
   const votingEndsAt = new BN(Math.floor(Date.now() / 1000) + durationSeconds);
 
-  const tx = await program.methods
-    .devCreateProposal(
-      proposalId,
-      title,
-      description,
-      votingEndsAt,
-      gateMint,
-      minBalance,
-      quorum,
-      thresholdBps,
-      privacyLevel,
-      discussionUrl,
-      new BN(executionDelay)
-    )
-    .accounts({
-      authority,
-      proposal: proposalPDA,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc(TX_OPTS);
+  const tx = await rpcWithErrorFix(() =>
+    program.methods
+      .devCreateProposal(
+        proposalId,
+        title,
+        description,
+        votingEndsAt,
+        gateMint,
+        minBalance,
+        quorum,
+        thresholdBps,
+        privacyLevel,
+        discussionUrl,
+        new BN(executionDelay)
+      )
+      .accounts({
+        authority,
+        proposal: proposalPDA,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc(TX_OPTS)
+  );
 
   return { tx, proposalId, proposalPDA };
 }
@@ -106,15 +128,17 @@ export async function delegateVote(
   delegate: PublicKey
 ): Promise<string> {
   const [delegationPDA] = findDelegationPDA(delegator);
-  return await program.methods
-    .delegateVote()
-    .accounts({
-      delegator,
-      delegate,
-      delegation: delegationPDA,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc(TX_OPTS);
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .delegateVote()
+      .accounts({
+        delegator,
+        delegate,
+        delegation: delegationPDA,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc(TX_OPTS)
+  );
 }
 
 export async function revokeDelegation(
@@ -122,13 +146,15 @@ export async function revokeDelegation(
   delegator: PublicKey
 ): Promise<string> {
   const [delegationPDA] = findDelegationPDA(delegator);
-  return await program.methods
-    .revokeDelegation()
-    .accounts({
-      delegator,
-      delegation: delegationPDA,
-    })
-    .rpc(TX_OPTS);
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .revokeDelegation()
+      .accounts({
+        delegator,
+        delegation: delegationPDA,
+      })
+      .rpc(TX_OPTS)
+  );
 }
 
 export async function getDelegation(
@@ -152,15 +178,17 @@ export async function devInitTally(
 ): Promise<string> {
   const [tallyPDA] = findTallyPDA(proposalPDA);
 
-  return await program.methods
-    .devInitTally()
-    .accounts({
-      authority,
-      proposal: proposalPDA,
-      tally: tallyPDA,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc(TX_OPTS);
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .devInitTally()
+      .accounts({
+        authority,
+        proposal: proposalPDA,
+        tally: tallyPDA,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc(TX_OPTS)
+  );
 }
 
 // Dev mode: Cast vote (token gating still enforced)
@@ -177,18 +205,20 @@ export async function devCastVote(
   const [voteRecordPDA] = findVoteRecordPDA(proposalPDA, voter);
   const voterTokenAccount = getAssociatedTokenAddressSync(gateMint, voter);
 
-  return await program.methods
-    .devCastVote(encryptedChoice, nonce, voterPubkey)
-    .accounts({
-      voter,
-      proposal: proposalPDA,
-      tally: tallyPDA,
-      voterTokenAccount,
-      voteRecord: voteRecordPDA,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc(TX_OPTS);
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .devCastVote(encryptedChoice, nonce, voterPubkey)
+      .accounts({
+        voter,
+        proposal: proposalPDA,
+        tally: tallyPDA,
+        voterTokenAccount,
+        voteRecord: voteRecordPDA,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc(TX_OPTS)
+  );
 }
 
 // Production mode: Cast vote with full Arcium MXE accounts
@@ -218,29 +248,31 @@ export async function castVoteWithArcium(
   const voterTokenAccount = getAssociatedTokenAddressSync(gateMint, voter);
   const [computationOffsetPDA] = findComputationOffsetPDA();
 
-  return await program.methods
-    .castVote(encryptedChoice, nonce, voterPubkey)
-    .accounts({
-      voter,
-      proposal: proposalPDA,
-      tally: tallyPDA,
-      voterTokenAccount,
-      voteRecord: voteRecordPDA,
-      computationOffsetAccount: computationOffsetPDA,
-      signSeed: arciumAccounts.signSeed,
-      arciumProgram: arciumAccounts.arciumProgram,
-      mxeAccount: arciumAccounts.mxeAccount,
-      clusterAccount: arciumAccounts.clusterAccount,
-      mempoolAccount: arciumAccounts.mempoolAccount,
-      executingPool: arciumAccounts.executingPool,
-      computationAccount: arciumAccounts.computationAccount,
-      compDefAccount: arciumAccounts.compDefAccount,
-      poolAccount: arciumAccounts.poolAccount,
-      clockAccount: arciumAccounts.clockAccount,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc(TX_OPTS);
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .castVote(encryptedChoice, nonce, voterPubkey)
+      .accounts({
+        voter,
+        proposal: proposalPDA,
+        tally: tallyPDA,
+        voterTokenAccount,
+        voteRecord: voteRecordPDA,
+        computationOffsetAccount: computationOffsetPDA,
+        signSeed: arciumAccounts.signSeed,
+        arciumProgram: arciumAccounts.arciumProgram,
+        mxeAccount: arciumAccounts.mxeAccount,
+        clusterAccount: arciumAccounts.clusterAccount,
+        mempoolAccount: arciumAccounts.mempoolAccount,
+        executingPool: arciumAccounts.executingPool,
+        computationAccount: arciumAccounts.computationAccount,
+        compDefAccount: arciumAccounts.compDefAccount,
+        poolAccount: arciumAccounts.poolAccount,
+        clockAccount: arciumAccounts.clockAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc(TX_OPTS)
+  );
 }
 
 // Dev mode: Reveal results (authority only, after voting ends)
@@ -252,13 +284,15 @@ export async function devRevealResults(
   noCount: number,
   abstainCount: number
 ): Promise<string> {
-  return await program.methods
-    .devRevealResults(yesCount, noCount, abstainCount)
-    .accounts({
-      authority,
-      proposal: proposalPDA,
-    })
-    .rpc(TX_OPTS);
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .devRevealResults(yesCount, noCount, abstainCount)
+      .accounts({
+        authority,
+        proposal: proposalPDA,
+      })
+      .rpc(TX_OPTS)
+  );
 }
 
 // Fetch all proposals (with retry)
