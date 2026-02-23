@@ -146,6 +146,7 @@ export default function Home() {
   }, [connected, anchorWallet, connection]);
 
   // Check token balances for all proposals
+  // Returns -1 when ATA doesn't exist (voter needs to claim), 0+ for actual balance
   const checkTokenBalances = useCallback(async (proposalList: Proposal[]) => {
     if (!publicKey) return;
     const results = await Promise.all(
@@ -155,7 +156,7 @@ export default function Home() {
           const info = await withRetry(() => connection.getTokenAccountBalance(ata));
           return { key: p.publicKey.toString(), balance: Number(info.value.amount) };
         } catch {
-          return { key: p.publicKey.toString(), balance: 0 };
+          return { key: p.publicKey.toString(), balance: -1 };
         }
       })
     );
@@ -243,7 +244,7 @@ export default function Home() {
       const res = await fetch("/api/faucet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress: publicKey.toBase58() }),
+        body: JSON.stringify({ walletAddress: publicKey.toBase58(), gateMint: proposal.gateMint.toBase58() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Faucet request failed");
@@ -366,10 +367,18 @@ export default function Home() {
 
     try {
       // Pre-validate: check voter holds the gate token before sending tx
-      const balance = tokenBalances[key] ?? 0;
-      if (balance < (proposal.minBalance?.toNumber?.() ?? 1)) {
+      // tokenBalances is -1 when ATA doesn't exist, 0+ for actual balance
+      const balance = tokenBalances[key] ?? -1;
+      const minBal = Number(proposal.minBalance) || 0;
+      if (balance < 0) {
         throw new Error(
-          `InsufficientBalance: You need at least ${proposal.minBalance?.toNumber?.() ?? 1} gate token(s) to vote. ` +
+          "InsufficientBalance: You don't have the gate token for this proposal. " +
+          "Claim gate tokens first."
+        );
+      }
+      if (balance < minBal) {
+        throw new Error(
+          `InsufficientBalance: You need at least ${minBal} gate token(s) to vote. ` +
           `Use the faucet to claim tokens first.`
         );
       }
