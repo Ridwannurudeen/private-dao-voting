@@ -206,10 +206,14 @@ export function ProposalCard({
         {p.quorum > 0 && (<> | Quorum: {total}/{p.quorum} {total >= p.quorum ? <span className="text-green-400">met</span> : <span className="text-yellow-400">not met</span>}</>)}
       </p>
 
-      {/* Token gate check */}
-      {active && !hasVoted && tokenBalance < Number(p.minBalance) && (
+      {/* Token gate check: show claim when ATA missing (balance=-1) or below minimum */}
+      {active && !hasVoted && (tokenBalance < 0 || tokenBalance < Number(p.minBalance)) && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 space-y-3">
-          <p className="text-sm text-yellow-400">You need gate tokens to vote on this proposal.</p>
+          <p className="text-sm text-yellow-400">
+            {tokenBalance < 0
+              ? "You need the gate token to vote on this proposal."
+              : `You need at least ${p.minBalance.toString()} gate token(s) to vote.`}
+          </p>
           <button onClick={onClaimTokens} disabled={isClaiming}
             className="w-full py-3 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl font-semibold text-white disabled:opacity-50">
             {isClaiming ? "Claiming..." : "Claim Gate Tokens"}
@@ -218,7 +222,7 @@ export function ProposalCard({
       )}
 
       {/* Voting buttons */}
-      {active && !hasVoted && tokenBalance >= Number(p.minBalance) && (
+      {active && !hasVoted && tokenBalance >= 0 && tokenBalance >= Number(p.minBalance) && (
         <div className="space-y-3">
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <button onClick={() => onSelectChoice("yes")} disabled={isVoting} aria-label="Vote Yes" aria-pressed={selectedChoice === "yes"}

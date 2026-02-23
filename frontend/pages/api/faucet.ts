@@ -34,7 +34,7 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { walletAddress } = req.body;
+  const { walletAddress, gateMint: requestedMint } = req.body;
   if (!walletAddress || typeof walletAddress !== "string") {
     return res.status(400).json({ error: "walletAddress is required" });
   }
@@ -48,9 +48,19 @@ export default async function handler(
     return res.status(500).json({ error: "Faucet not configured: missing GATE_MINT_AUTHORITY" });
   }
 
-  const gateMintStr = process.env.NEXT_PUBLIC_GATE_MINT;
+  // Use the proposal's gate mint if provided, fall back to default
+  const gateMintStr = (typeof requestedMint === "string" && requestedMint.length > 0)
+    ? requestedMint
+    : process.env.NEXT_PUBLIC_GATE_MINT;
   if (!gateMintStr) {
     return res.status(500).json({ error: "Faucet not configured: missing NEXT_PUBLIC_GATE_MINT" });
+  }
+
+  // Validate the gate mint is a valid public key
+  try {
+    new PublicKey(gateMintStr);
+  } catch {
+    return res.status(400).json({ error: "Invalid gate mint address" });
   }
 
   // Validate walletAddress is a valid Solana public key before proceeding
