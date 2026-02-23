@@ -137,23 +137,29 @@ export default function Home() {
     return () => { unsub(); };
   }, [connected, anchorWallet, connection]);
 
-  // Check token balances for all proposals
-  // Returns -1 when ATA doesn't exist (voter needs to claim), 0+ for actual balance
+  // Check token balances for all proposals using batch RPC
   const checkTokenBalances = useCallback(async (proposalList: Proposal[]) => {
     if (!publicKey) return;
-    const results = await Promise.all(
-      proposalList.map(async (p) => {
-        try {
-          const ata = getAssociatedTokenAddressSync(p.gateMint, publicKey);
-          const info = await withRetry(() => connection.getTokenAccountBalance(ata));
-          return { key: p.publicKey.toString(), balance: Number(info.value.amount) };
-        } catch {
-          return { key: p.publicKey.toString(), balance: -1 };
-        }
-      })
-    );
+    // Deduplicate gate mints — most proposals share the same mint
+    const mintSet = new Set(proposalList.map((p) => p.gateMint.toString()));
+    const mintToBalance: Record<string, number> = {};
+
+    // Single batched call per unique mint
+    for (const mintStr of mintSet) {
+      try {
+        const mint = new PublicKey(mintStr);
+        const ata = getAssociatedTokenAddressSync(mint, publicKey);
+        const info = await connection.getTokenAccountBalance(ata);
+        mintToBalance[mintStr] = Number(info.value.amount);
+      } catch {
+        mintToBalance[mintStr] = -1;
+      }
+    }
+
     const balances: Record<string, number> = {};
-    for (const r of results) balances[r.key] = r.balance;
+    for (const p of proposalList) {
+      balances[p.publicKey.toString()] = mintToBalance[p.gateMint.toString()] ?? -1;
+    }
     setTokenBalances(balances);
   }, [publicKey, connection]);
 
@@ -206,24 +212,31 @@ export default function Home() {
         const bId = BN.isBN(b.id) ? b.id : new BN(b.id.toString());
         return bId.cmp(aId);
       });
+      // Show proposals immediately — don't wait for vote records or balances
       setProposals(mapped);
-      checkTokenBalances(mapped);
+      setLoading(false);
 
+      // Load vote records and token balances in parallel (background)
       if (publicKey) {
-        const results = await Promise.all(
-          mapped.map(async (p) => {
-            try {
-              const [pda] = findVoteRecordPDA(p.publicKey, publicKey);
-              await (program.account as any).voteRecord.fetch(pda);
-              return { key: p.publicKey.toString(), voted: true };
-            } catch {
-              return { key: p.publicKey.toString(), voted: false };
-            }
-          })
-        );
+        const [voteResults] = await Promise.all([
+          Promise.all(
+            mapped.map(async (p) => {
+              try {
+                const [pda] = findVoteRecordPDA(p.publicKey, publicKey);
+                await (program.account as any).voteRecord.fetch(pda);
+                return { key: p.publicKey.toString(), voted: true };
+              } catch {
+                return { key: p.publicKey.toString(), voted: false };
+              }
+            })
+          ),
+          checkTokenBalances(mapped),
+        ]);
         const v: Record<string, boolean> = {};
-        for (const r of results) v[r.key] = r.voted;
+        for (const r of voteResults) v[r.key] = r.voted;
         setVoted(v);
+      } else {
+        checkTokenBalances(mapped);
       }
     } catch (e: any) {
       console.error("Load failed:", e);
