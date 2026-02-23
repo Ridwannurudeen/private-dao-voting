@@ -11,6 +11,10 @@ export const DEFAULT_GATE_MINT = new PublicKey(
   process.env.NEXT_PUBLIC_GATE_MINT || "6JeDjgobNYjSzuUUyEaiNnzphBDgVYcwf3u9HLNtPu17"
 );
 
+// Devnet RPCs return stale blockhashes under load, causing "Blockhash not found"
+// during simulation. Skip preflight to send directly to the validator.
+const TX_OPTS = { skipPreflight: true, commitment: "confirmed" as const };
+
 // PDA helpers
 export function findProposalPDA(proposalId: BN): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
@@ -83,7 +87,7 @@ export async function devCreateProposal(
       proposal: proposalPDA,
       systemProgram: SystemProgram.programId,
     })
-    .rpc();
+    .rpc(TX_OPTS);
 
   return { tx, proposalId, proposalPDA };
 }
@@ -110,7 +114,7 @@ export async function delegateVote(
       delegation: delegationPDA,
       systemProgram: SystemProgram.programId,
     })
-    .rpc();
+    .rpc(TX_OPTS);
 }
 
 export async function revokeDelegation(
@@ -124,7 +128,7 @@ export async function revokeDelegation(
       delegator,
       delegation: delegationPDA,
     })
-    .rpc();
+    .rpc(TX_OPTS);
 }
 
 export async function getDelegation(
@@ -156,7 +160,7 @@ export async function devInitTally(
       tally: tallyPDA,
       systemProgram: SystemProgram.programId,
     })
-    .rpc();
+    .rpc(TX_OPTS);
 }
 
 // Dev mode: Cast vote (token gating still enforced)
@@ -184,7 +188,7 @@ export async function devCastVote(
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     })
-    .rpc();
+    .rpc(TX_OPTS);
 }
 
 // Production mode: Cast vote with full Arcium MXE accounts
@@ -236,7 +240,7 @@ export async function castVoteWithArcium(
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     })
-    .rpc();
+    .rpc(TX_OPTS);
 }
 
 // Dev mode: Reveal results (authority only, after voting ends)
@@ -254,7 +258,7 @@ export async function devRevealResults(
       authority,
       proposal: proposalPDA,
     })
-    .rpc();
+    .rpc(TX_OPTS);
 }
 
 // Fetch all proposals (with retry)
