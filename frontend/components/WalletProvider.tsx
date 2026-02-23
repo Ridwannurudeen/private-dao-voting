@@ -8,11 +8,15 @@ interface Props {
 }
 
 export default function WalletProviderWrapper({ children }: Props) {
-  const endpoint = "https://api.devnet.solana.com";
+  const endpoint = process.env.NEXT_PUBLIC_SOLANA_RPC || "https://api.devnet.solana.com";
   const wallets = useMemo(() => [], []);
+  const connectionConfig = useMemo(
+    () => ({ commitment: "confirmed" as const, confirmTransactionInitialTimeout: 60000 }),
+    []
+  );
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
+    <ConnectionProvider endpoint={endpoint} config={connectionConfig}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
           {children}
