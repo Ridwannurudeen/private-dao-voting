@@ -30,8 +30,6 @@ The core privacy logic uses the `#[encrypted]` module pattern with `#[instructio
 - **`initialize_voting`** — Creates an `Enc<Mxe, Tally>` (cluster-owned encrypted state) with zero counters
 - **`cast_vote`** — Receives `Enc<Mxe, Tally>` (cumulative state) + `Enc<Shared, u8>` (individual vote, client-encrypted). Uses constant-time `eq()` + `cast()` comparisons to increment the correct counter without branching on secret values
 - **`finalize_and_reveal`** — Triggers Cerberus threshold decryption of aggregate totals only (never individual votes)
-- **`finalize_with_threshold`** — Pass/fail with configurable quorum + basis-point threshold, abstain excluded
-- **`get_live_tally`** / **`get_vote_count`** — Transparent mode queries
 
 Key design: `Enc<Shared, u8>` for individual votes (client-encrypted via x25519 ECDH) vs `Enc<Mxe, Tally>` for cumulative state (cluster-owned, only decryptable via Cerberus threshold). The `circuit_hash!` macro embeds a SHA-256 of the compiled circuit at build time — verified at `init_comp_def` to detect tampered MPC bytecode.
 
@@ -57,42 +55,76 @@ The frontend integrates with Arcium via:
 | Front-running prevention | Opaque encrypted tally until reveal |
 | Threshold trust | Multi-node MPC — single node compromise reveals nothing |
 
+## Technical Architecture
+
+### On-Chain Accounts
+
+| Account | PDA Seeds | Description |
+|---------|-----------|-------------|
+| **Proposal** | `["proposal", id]` | Title, description, voting deadline, gate mint, vote counts (u32), reveal status |
+| **Tally** | `["tally", proposal]` | Encrypted vote accumulator, initialized per proposal |
+| **VoteRecord** | `["vote_record", proposal, voter]` | Double-vote prevention; created on first vote |
+
+### Program Instructions
+
+| Instruction | Description | Access |
+|-------------|-------------|--------|
+| `dev_create_proposal` | Create proposal with title, description, voting period, and gate token | Any wallet |
+| `dev_init_tally` | Initialize the tally account for a proposal | Proposal authority |
+| `dev_cast_vote` | Submit an encrypted vote (dev mode, bypasses Arcium CPI) | Token holders |
+| `dev_reveal_results` | Reveal aggregate results after voting ends | Proposal authority |
+| `cast_vote` | Submit encrypted vote with full Arcium CPI (production) | Token holders |
+
+### Security Layers
+
+| Layer | Mechanism | What it prevents |
+|-------|-----------|-----------------|
+| Vote privacy | x25519 ECDH + RescueCipher encryption | Anyone reading vote content |
+| Double voting | `VoteRecord` PDA per (proposal, voter) | Same wallet voting twice |
+| Token gating | SPL token balance check before vote | Non-stakeholders influencing outcomes |
+| Callback auth | Sign PDA signer constraint on callbacks | Unauthorized result injection |
+| Time lock | `voting_ends_at` timestamp enforcement | Votes after deadline |
+| MPC integrity | Dishonest majority Cerberus protocol | Malicious nodes learning votes or forging tallies |
+| Circuit integrity | `circuit_hash!` SHA-256 verification | Tampered MPC bytecode |
+
+### Gate Token Faucet
+
+The frontend includes a built-in faucet (`/api/faucet`) for devnet testing:
+- Mints gate tokens to **any** wallet that wants to vote
+- Rate limited: max 3 claims per wallet per 10 minutes
+- Auto-creates the Associated Token Account if needed
+- Uses a server-side mint authority keypair to sign mint transactions
+
 ## Technical Highlights
 
-- **Anchor program** with 8-layer security: token gating, double-vote PDA, delegation check, quorum enforcement, checked arithmetic, callback auth, time locks, MPC integrity
-- **Vote delegation** — On-chain delegation PDAs with revocation, enforced at the program level
-- **Quorum thresholds** — Configurable minimum vote count to prevent low-participation decisions
-- **Dev mode** — Full testing without a live MXE cluster (same encryption pipeline, bypasses CPI)
-- **34 tests** across 3 layers: 9 Anchor integration, 10 Playwright E2E, 15 Arcis circuit
-- **CI pipeline** — 4 GitHub Actions jobs: build, E2E, rustfmt, security audit
-- **Dashboard UI** — Three-panel layout with left sidebar (MXE heartbeat, Arx Nodes, mempool capacity), main governance area, and right panel (live network visualization, delegation, activity feed)
+- **Anchor program** deployed on Solana Devnet (`71tbXM3A2j5pKHfjtu1LYgY8jfQWuoZtHecDu6F6EPJH`)
+- **Dev mode** — Full end-to-end testing without a live MXE cluster (same encryption pipeline, bypasses CPI)
+- **CI pipeline** — GitHub Actions: build, E2E, rustfmt, security audit
+- **Dashboard UI** — Three-panel layout with sidebar (MXE heartbeat, Arx Nodes, mempool capacity), main governance area, and right panel (live network visualization, activity feed)
+- **Proposal sorting** — Active proposals first, then newest to oldest by creation time
+- **Graceful error handling** — Undecodable legacy accounts are skipped, user-friendly Anchor error messages
 
 ## User Experience
 
 - Glass morphism dark theme with full light mode support
 - Animated encryption visualization (hex particles flowing into a lock)
-- Interactive 5-step "How It Works" walkthrough
+- 4-step vote progress: Encrypting → Submitting → Processing → Confirmed
+- Interactive "How It Works" walkthrough
 - Confetti celebration on successful vote
 - Real-time countdown timers with urgency pulse
 - Keyboard shortcuts (N/R/Esc), ARIA accessibility, focus trapping
 - PWA-installable, mobile-responsive
-- Solana Explorer links in notifications
+- Solana Explorer links in toast notifications
 - CSV/JSON result export
-- Rate-limited devnet token faucet
+- Shareable proposal links (`/proposal/[id]`)
 
-## Why Arcium? — Technical Justification for the RTG Committee
+## Why Arcium? — Technical Justification
 
 Blockchain governance has a privacy gap that threatens institutional adoption. Traditional encryption protects data at rest and in transit, but computation requires decryption — meaning vote aggregation has always required a trusted party who sees every ballot. This is the "data-in-use" problem, and it's why no major institution trusts on-chain governance for consequential decisions.
 
-Arcium's MXE is the missing infrastructure layer. By performing arithmetic directly on secret-shared values via the Cerberus protocol, Private DAO Voting achieves what was previously impossible: a governance system where votes are encrypted end-to-end — including *during* tallying. The MXE's dishonest-majority security (N-1 tolerance) means even a near-total compromise of the compute cluster cannot reveal individual votes or manipulate results. MAC-authenticated shares provide tamper detection, and the `circuit_hash!` macro ensures the MPC bytecode itself hasn't been modified.
+Arcium's MXE is the missing infrastructure layer. By performing arithmetic directly on secret-shared values via the Cerberus protocol, Private DAO Voting achieves what was previously impossible: a governance system where votes are encrypted end-to-end — including *during* tallying. The MXE's dishonest-majority security (N-1 tolerance) means even a near-total compromise of the compute cluster cannot reveal individual votes or manipulate results.
 
-This isn't a theoretical exercise. The `#[encrypted]` module pattern with `Enc<Mxe, Tally>` demonstrates Arcium's unique decentralized compute stack in a production-grade application: client-side encryption via x25519 ECDH, MXE mempool submission, MPC consensus across Arx Nodes, and Solana settlement callbacks — all with a consumer-grade UX (animated encryption visualization, 4-step progress tracking, one-click voting). The architecture generalizes to any confidential aggregation problem: sealed-bid auctions, private credit scoring, confidential treasury management.
-
-For institutional governance — where board votes, compensation decisions, and strategic direction are at stake — data-in-use privacy isn't a feature. It's a prerequisite. Arcium makes it possible on Solana.
-
-## Use Case Expansion: Institutional Treasury Management
-
-Beyond voting, the same `Enc<Mxe, Tally>` pattern enables **confidential budget allocation**. Imagine a DAO treasury committee where each member submits encrypted allocation preferences across budget categories (development, marketing, operations). The MXE tallies preferences into aggregate allocations without revealing individual member priorities. This prevents politicking, eliminates anchoring bias (no one sees others' numbers first), and produces mathematically optimal allocations. The Cerberus security model ensures even a majority-compromised committee cannot manipulate budget outcomes. Treasury multisig signers execute the aggregate allocation without ever seeing individual inputs — true confidential governance beyond binary yes/no votes.
+This isn't a theoretical exercise. The `#[encrypted]` module pattern with `Enc<Mxe, Tally>` demonstrates Arcium's unique decentralized compute stack in a production-grade application: client-side encryption via x25519 ECDH, MXE mempool submission, MPC consensus across Arx Nodes, and Solana settlement callbacks — all with a consumer-grade UX. The architecture generalizes to any confidential aggregation problem: sealed-bid auctions, private credit scoring, confidential treasury management.
 
 ## Impact
 
@@ -105,3 +137,4 @@ This pattern applies beyond DAOs: board elections, grant committees, community p
 - **Live Demo:** https://privatedao-arcium.vercel.app/
 - **GitHub:** https://github.com/Ridwannurudeen/private-dao-voting
 - **Program ID:** `71tbXM3A2j5pKHfjtu1LYgY8jfQWuoZtHecDu6F6EPJH` (Solana Devnet)
+- **Gate Token Mint:** `6JeDjgobNYjSzuUUyEaiNnzphBDgVYcwf3u9HLNtPu17`
