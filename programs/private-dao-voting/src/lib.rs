@@ -291,6 +291,21 @@ pub mod private_dao_voting {
             VotingError::VotingEnded
         );
 
+        // Check no active delegation — delegators must revoke before voting directly
+        let (delegation_pda, _) = Pubkey::find_program_address(
+            &[DELEGATION_SEED, ctx.accounts.voter.key().as_ref()],
+            ctx.program_id,
+        );
+        let delegation_info = ctx
+            .remaining_accounts
+            .iter()
+            .find(|a| a.key() == delegation_pda);
+        if let Some(acct) = delegation_info {
+            if acct.data_len() > 0 && acct.owner == ctx.program_id {
+                return Err(VotingError::ActiveDelegation.into());
+            }
+        }
+
         // Token gate: voter must hold the required SPL token
         let token_account = &ctx.accounts.voter_token_account;
         require!(
@@ -389,6 +404,9 @@ pub mod private_dao_voting {
             ctx.accounts.authority.key() == proposal.authority,
             VotingError::Unauthorized
         );
+
+        // Prevent re-reveal
+        require!(!proposal.is_revealed, VotingError::AlreadyRevealed);
 
         // Validate voting has ended
         let clock = Clock::get()?;
@@ -531,11 +549,15 @@ pub mod private_dao_voting {
         // Verify circuit integrity: the provided hash must match the compile-time hash.
         // This prevents deployment of tampered circuits — if any byte of the Arcis
         // bytecode has been modified, the SHA-256 hash will differ.
+        require!(
+            circuit_hash == CIRCUIT_HASH,
+            VotingError::CircuitHashMismatch
+        );
+
         msg!(
             "Initializing computation definitions with circuit hash: {}",
             circuit_hash
         );
-        msg!("Expected circuit hash: {}", CIRCUIT_HASH);
         msg!(
             "Bytecode size: {} bytes ({} computation definitions)",
             comp_def_data.len(),
@@ -740,6 +762,9 @@ pub mod private_dao_voting {
             VotingError::Unauthorized
         );
 
+        // Prevent re-reveal
+        require!(!proposal.is_revealed, VotingError::AlreadyRevealed);
+
         let clock = Clock::get()?;
         require!(
             clock.unix_timestamp >= proposal.voting_ends_at,
@@ -878,8 +903,14 @@ pub struct CreateProposal<'info> {
 
 #[derive(Accounts)]
 pub struct InitTallyCallback<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = proposal.authority == authority.key() @ VotingError::Unauthorized
+    )]
     pub proposal: Account<'info, Proposal>,
+
+    /// CHECK: Proposal authority — validated by constraint above
+    pub authority: AccountInfo<'info>,
 
     #[account(
         init,
@@ -889,6 +920,14 @@ pub struct InitTallyCallback<'info> {
         bump
     )]
     pub tally: Account<'info, Tally>,
+
+    /// CHECK: Sign PDA ensures this callback was invoked via Arcium CPI
+    #[account(
+        seeds = [SIGN_SEED],
+        bump,
+        signer
+    )]
+    pub sign_seed: AccountInfo<'info>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -1392,4 +1431,8 @@ pub enum VotingError {
     DepositAlreadyProcessed,
     #[msg("Results not yet revealed")]
     NotYetRevealed,
+    #[msg("Circuit hash mismatch: deployed bytecode does not match expected hash")]
+    CircuitHashMismatch,
+    #[msg("Results already revealed")]
+    AlreadyRevealed,
 }

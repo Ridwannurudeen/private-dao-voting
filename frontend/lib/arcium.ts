@@ -150,12 +150,21 @@ export class ArciumClient {
       }
 
       if (this.developmentMode) {
-        const seed = new TextEncoder().encode(
-          "arcium-dev-mode-do-not-use-in-prod"
-        );
-        const devKey = new Uint8Array(32);
-        devKey.set(seed.slice(0, 32));
-        this.mxePublicKey = x25519.getPublicKey(devKey);
+        // Safety: refuse to use deterministic dev key if we detect a production build
+        if (
+          typeof window !== "undefined" &&
+          window.location.hostname !== "localhost" &&
+          window.location.hostname !== "127.0.0.1" &&
+          !window.location.hostname.includes("vercel.app")
+        ) {
+          throw new Error(
+            "Development mode detected in production environment. " +
+              "Set NEXT_PUBLIC_MXE_PROGRAM_ID to a valid MXE program ID."
+          );
+        }
+        // Deterministic key for local/devnet testing only
+        const seed = x25519.utils.randomPrivateKey();
+        this.mxePublicKey = x25519.getPublicKey(seed);
       } else {
         if (!this.mxeProgramId) {
           throw new Error("MXE program id is required for production mode");
