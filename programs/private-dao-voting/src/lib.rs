@@ -64,7 +64,7 @@ use arcium_client::idl::arcium::program::Arcium;
 use arcium_client::idl::arcium::types::{ArgumentList, ArgumentRef, CallbackInstruction};
 use arcium_client::pda::comp_def_offset;
 
-declare_id!("XBdTCeLj6K8ociVWPectPoFQJ2Nowa6saHP2jM74ka8");
+declare_id!("71tbXM3A2j5pKHfjtu1LYgY8jfQWuoZtHecDu6F6EPJH");
 
 // ==================== CONSTANTS ====================
 
