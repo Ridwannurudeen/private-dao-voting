@@ -166,7 +166,7 @@ export default function ProposalDetail() {
       setIsEncrypting(false);
 
       let txSig: string;
-      if (DEVELOPMENT_MODE) {
+      if (DEVELOPMENT_MODE || client.isFallback()) {
         txSig = await devCastVote(
           program, publicKey, p.publicKey, p.gateMint,
           secretInput.encryptedChoice, secretInput.nonce, secretInput.voterPubkey
@@ -181,7 +181,7 @@ export default function ProposalDetail() {
         );
       }
 
-      if (DEVELOPMENT_MODE) {
+      if (DEVELOPMENT_MODE || (client && client.isFallback())) {
         setDevTallies((prev) => {
           const current = prev[key] || { yes: 0, no: 0, abstain: 0 };
           const updated = {

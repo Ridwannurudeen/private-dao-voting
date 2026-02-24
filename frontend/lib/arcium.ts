@@ -106,6 +106,7 @@ export class ArciumClient {
 
   private mxeProgramId: PublicKey | null = null;
   private clusterOffset: BN;
+  private fallbackMode = false;
 
   constructor(provider: AnchorProvider, clusterOffset?: BN) {
     this.connection = provider.connection;
@@ -169,10 +170,18 @@ export class ArciumClient {
         if (!this.mxeProgramId) {
           throw new Error("MXE program id is required for production mode");
         }
-        this.mxePublicKey = await getMXEPublicKey(
-          this.provider,
-          this.mxeProgramId
-        );
+        try {
+          this.mxePublicKey = await getMXEPublicKey(
+            this.provider,
+            this.mxeProgramId
+          );
+        } catch {
+          // MXE state account not live yet — fall back to local encryption
+          console.warn("MXE account not found on-chain, using local encryption fallback");
+          const seed = x25519.utils.randomPrivateKey();
+          this.mxePublicKey = x25519.getPublicKey(seed);
+          this.fallbackMode = true;
+        }
       }
 
       const sharedSecret = x25519.getSharedSecret(
@@ -186,6 +195,8 @@ export class ArciumClient {
         status: "IDLE",
         message: this.developmentMode
           ? "Development mode (local encryption)"
+          : this.fallbackMode
+          ? "Awaiting MXE (local encryption fallback)"
           : "Connected to Arcium MXE",
       });
 
@@ -323,6 +334,10 @@ export class ArciumClient {
 
   isConnected(): boolean {
     return this.initialized;
+  }
+
+  isFallback(): boolean {
+    return this.fallbackMode;
   }
 
   getClusterOffset(): BN {

@@ -394,7 +394,7 @@ export default function Home() {
       setVoteStep((s) => ({ ...s, [key]: "submitting" }));
 
       let txSig: string;
-      if (DEVELOPMENT_MODE) {
+      if (DEVELOPMENT_MODE || client.isFallback()) {
         txSig = await devCastVote(
           program, publicKey, proposal.publicKey, proposal.gateMint,
           secretInput.encryptedChoice, secretInput.nonce, secretInput.voterPubkey
@@ -411,8 +411,8 @@ export default function Home() {
 
       setVoteStep((s) => ({ ...s, [key]: "processing" }));
 
-      // In dev mode, track the vote choice locally for reveal
-      if (DEVELOPMENT_MODE) {
+      // In dev/fallback mode, track the vote choice locally for reveal
+      if (DEVELOPMENT_MODE || client.isFallback()) {
         setDevTallies((prev) => {
           const current = prev[key] || { yes: 0, no: 0, abstain: 0 };
           const updated = {
@@ -627,12 +627,18 @@ export default function Home() {
               <div className="hidden sm:flex items-center gap-2">
                 <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
                   arciumClient
-                    ? "bg-green-500/10 text-green-400 border-green-500/20"
+                    ? arciumClient.isFallback()
+                      ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
+                      : "bg-green-500/10 text-green-400 border-green-500/20"
                     : DEVELOPMENT_MODE
                     ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
                     : "bg-red-500/10 text-red-400 border-red-500/20"
                 }`}>
-                  {arciumClient ? "MXE Active" : DEVELOPMENT_MODE ? "Dev Mode" : "MXE Offline"}
+                  {arciumClient
+                    ? arciumClient.isFallback()
+                      ? "Awaiting MXE"
+                      : "MXE Active"
+                    : DEVELOPMENT_MODE ? "Dev Mode" : "MXE Offline"}
                 </span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
                   Cerberus Protocol
