@@ -15,6 +15,7 @@ import {
   devInitTally,
   devCastVote,
   castVoteWithArcium,
+  ensureTallyInitialized,
   devRevealResults,
 } from "../lib/contract";
 import {
@@ -147,7 +148,6 @@ export default function Home() {
     client.initialize(MXE_PROGRAM_ID).then((success) => {
       if (success) {
         setArciumClient(client);
-        console.log("Arcium client initialized", DEVELOPMENT_MODE ? "(dev mode)" : "(production)");
       }
     });
 
@@ -392,6 +392,9 @@ export default function Home() {
       const secretInput = client.toSecretInput(encryptedVote, publicKey);
       setIsEncrypting(false);
       setVoteStep((s) => ({ ...s, [key]: "submitting" }));
+
+      // Ensure tally account exists before voting
+      await ensureTallyInitialized(program, publicKey, proposal.publicKey);
 
       let txSig: string;
       if (DEVELOPMENT_MODE || client.isFallback()) {
