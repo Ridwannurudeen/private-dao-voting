@@ -12,9 +12,9 @@
 
 [![Watch the demo](https://cdn.loom.com/sessions/thumbnails/b7599bd310024a6cbef18e3b7fa0f70b-ec008c9759c7fb63-full-play.gif)](https://www.loom.com/share/b7599bd310024a6cbef18e3b7fa0f70b)
 
-| Landing | Dashboard | Voting |
+| Landing | Features | Onboarding |
 |:---:|:---:|:---:|
-| ![Landing](docs/screenshot-landing.png) | ![Dashboard](docs/screenshot-features.png) | ![Detail](docs/screenshot-light-theme.png) |
+| ![Landing](docs/screenshot-landing.png) | ![Features](docs/screenshot-features.png) | ![Onboarding](docs/screenshot-howitworks.png) |
 
 **[Try it live](https://privatedao-arcium.vercel.app/)** — Connect a Solana devnet wallet, claim gate tokens, create proposals, and cast encrypted votes.
 
