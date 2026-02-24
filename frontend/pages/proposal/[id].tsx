@@ -12,6 +12,7 @@ import {
   findProposalPDA,
   findVoteRecordPDA,
   devCastVote,
+  castVoteWithArcium,
   devRevealResults,
 } from "../../lib/contract";
 import {
@@ -21,6 +22,7 @@ import {
   DEVELOPMENT_MODE,
   DEVNET_CLUSTER_OFFSET,
   ArciumStatusEvent,
+  deriveComputationOffset,
 } from "../../lib/arcium";
 import { ProposalCard, Proposal } from "../../components/ProposalCard";
 import { Toast, ToastData } from "../../components/Toast";
@@ -163,10 +165,21 @@ export default function ProposalDetail() {
       const secretInput = client.toSecretInput(encryptedVote, publicKey);
       setIsEncrypting(false);
 
-      const txSig = await devCastVote(
-        program, publicKey, p.publicKey, p.gateMint,
-        secretInput.encryptedChoice, secretInput.nonce, secretInput.voterPubkey
-      );
+      let txSig: string;
+      if (DEVELOPMENT_MODE) {
+        txSig = await devCastVote(
+          program, publicKey, p.publicKey, p.gateMint,
+          secretInput.encryptedChoice, secretInput.nonce, secretInput.voterPubkey
+        );
+      } else {
+        const computationOffset = deriveComputationOffset(p.publicKey, Date.now());
+        const arciumAccounts = client.getArciumAccounts("vote", computationOffset);
+        txSig = await castVoteWithArcium(
+          program, publicKey, p.publicKey, p.gateMint,
+          secretInput.encryptedChoice, secretInput.nonce, secretInput.voterPubkey,
+          arciumAccounts
+        );
+      }
 
       if (DEVELOPMENT_MODE) {
         setDevTallies((prev) => {
