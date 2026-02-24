@@ -13,6 +13,7 @@ import {
   findVoteRecordPDA,
   devCastVote,
   castVoteWithArcium,
+  ensureTallyInitialized,
   devRevealResults,
 } from "../../lib/contract";
 import {
@@ -164,6 +165,9 @@ export default function ProposalDetail() {
       const encryptedVote = await client.encryptVote(voteValue, p.publicKey, publicKey);
       const secretInput = client.toSecretInput(encryptedVote, publicKey);
       setIsEncrypting(false);
+
+      // Ensure tally account exists before voting
+      await ensureTallyInitialized(program, publicKey, p.publicKey);
 
       let txSig: string;
       if (DEVELOPMENT_MODE || client.isFallback()) {

@@ -11,7 +11,13 @@ const ERROR_MAP: Record<string, string> = {
 };
 
 export function parseAnchorError(error: any): string {
-  const msg = error?.message || error?.toString() || "Unknown error";
+  if (!error) return "Unknown error";
+  const msg = typeof error === "string"
+    ? error
+    : error.message || error.msg || (typeof error.toString === "function" && error.toString() !== "[object Object]" ? error.toString() : "");
+  if (!msg) {
+    try { return JSON.stringify(error).slice(0, 200); } catch { return "Transaction failed (unknown error)"; }
+  }
 
   // Anchor 0.32 + web3.js 1.98 API mismatch: SendTransactionError constructor
   // receives positional args but expects an object, producing "Unknown action 'undefined'".

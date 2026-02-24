@@ -63,7 +63,7 @@ export interface SecretInput {
 // ==================== CONFIG ====================
 
 export const DEVNET_CLUSTER_OFFSET = new BN(456);
-export const MXE_PROGRAM_ID: string | null = process.env.NEXT_PUBLIC_MXE_PROGRAM_ID || null;
+export const MXE_PROGRAM_ID: string | null = process.env.NEXT_PUBLIC_MXE_PROGRAM_ID?.trim() || null;
 export const DEVELOPMENT_MODE = MXE_PROGRAM_ID === null;
 
 // ==================== VALIDATION ====================
@@ -171,13 +171,17 @@ export class ArciumClient {
           throw new Error("MXE program id is required for production mode");
         }
         try {
-          this.mxePublicKey = await getMXEPublicKey(
+          const mxeKeyPromise = getMXEPublicKey(
             this.provider,
             this.mxeProgramId
           );
-        } catch {
+          const timeout = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("MXE key fetch timed out")), 10000)
+          );
+          this.mxePublicKey = await Promise.race([mxeKeyPromise, timeout]);
+        } catch (mxeErr: any) {
           // MXE state account not live yet — fall back to local encryption
-          console.warn("MXE account not found on-chain, using local encryption fallback");
+          console.warn("MXE unavailable:", mxeErr?.message, "— using local encryption fallback");
           const seed = x25519.utils.randomPrivateKey();
           this.mxePublicKey = x25519.getPublicKey(seed);
           this.fallbackMode = true;

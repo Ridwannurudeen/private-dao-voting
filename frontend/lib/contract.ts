@@ -11,9 +11,7 @@ export const DEFAULT_GATE_MINT = new PublicKey(
   process.env.NEXT_PUBLIC_GATE_MINT || "6JeDjgobNYjSzuUUyEaiNnzphBDgVYcwf3u9HLNtPu17"
 );
 
-// Devnet RPCs return stale blockhashes under load, causing "Blockhash not found"
-// during simulation. Skip preflight to send directly to the validator.
-const TX_OPTS = { skipPreflight: true, commitment: "confirmed" as const };
+const TX_OPTS = { commitment: "confirmed" as const };
 
 // Anchor 0.32 calls `new SendTransactionError(msg, logs)` (positional),
 // but @solana/web3.js >=1.95 expects `{ action, signature, transactionMessage, logs }`.
@@ -24,13 +22,22 @@ async function rpcWithErrorFix<T>(fn: () => Promise<T>): Promise<T> {
     return await fn();
   } catch (err: any) {
     const msg = err?.message || "";
+    const logs: string[] | undefined = err?.logs || err?.transactionLogs;
     if (msg.includes("Unknown action")) {
-      const wrapped = new Error(
-        err?.transactionMessage || "Transaction failed on-chain. Check account state and token balance."
+      // Extract meaningful error from transaction logs
+      const logError = logs?.find((l: string) =>
+        l.includes("Error") || l.includes("failed") || l.includes("custom program error")
       );
-      (wrapped as any).logs = err?.logs || err?.transactionLogs;
+      const wrapped = new Error(
+        logError?.replace(/^Program log: /, "") ||
+        err?.transactionMessage ||
+        "Transaction failed on-chain. Check account state and token balance."
+      );
+      (wrapped as any).logs = logs;
       throw wrapped;
     }
+    // Attach logs to any error for better debugging
+    if (logs && !err.logs) err.logs = logs;
     throw err;
   }
 }
@@ -184,6 +191,22 @@ export async function devInitTally(
       })
       .rpc(TX_OPTS)
   );
+}
+
+/**
+ * Ensure the tally account exists for a proposal. If missing, initialize it.
+ * Any signer can pay for the account creation.
+ */
+export async function ensureTallyInitialized(
+  program: Program,
+  payer: PublicKey,
+  proposalPDA: PublicKey
+): Promise<void> {
+  const [tallyPDA] = findTallyPDA(proposalPDA);
+  const info = await program.provider.connection.getAccountInfo(tallyPDA);
+  if (!info) {
+    await devInitTally(program, payer, proposalPDA);
+  }
 }
 
 // Dev mode: Cast vote (token gating still enforced)
