@@ -62,7 +62,7 @@ export interface SecretInput {
 
 // ==================== CONFIG ====================
 
-export const DEVNET_CLUSTER_OFFSET = new BN(69069069);
+export const DEVNET_CLUSTER_OFFSET = new BN(456);
 export const MXE_PROGRAM_ID: string | null = process.env.NEXT_PUBLIC_MXE_PROGRAM_ID || null;
 export const DEVELOPMENT_MODE = MXE_PROGRAM_ID === null;
 
