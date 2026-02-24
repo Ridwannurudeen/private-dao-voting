@@ -6,10 +6,9 @@ test-ledger
 arcis
 programs
 tests
-scripts
 docs
-*.lock
-Cargo.*
+Cargo.lock
+Cargo.toml
 deployed_idl.json
 Gemini_Generated_Image*
 mock-arcium.test.ts
