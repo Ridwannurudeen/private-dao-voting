@@ -2,13 +2,15 @@
 
 **Fully confidential on-chain governance for Solana, powered by [Arcium](https://arcium.com) MXE.**
 
-**[Live on Devnet](https://privatedao-arcium.vercel.app/)** | [Explorer](https://explorer.solana.com/address/71tbXM3A2j5pKHfjtu1LYgY8jfQWuoZtHecDu6F6EPJH?cluster=devnet)
+**[Live on Devnet](https://privatedao-arcium.vercel.app/)** | [Demo Video](https://www.loom.com/share/b7599bd310024a6cbef18e3b7fa0f70b) | [Explorer](https://explorer.solana.com/address/71tbXM3A2j5pKHfjtu1LYgY8jfQWuoZtHecDu6F6EPJH?cluster=devnet)
 
 > Votes are encrypted client-side with x25519 + RescueCipher, submitted as ciphertext to Solana, tallied inside Arcium's MXE via the **Cerberus** protocol (dishonest-majority MPC), and only the aggregate result is ever revealed on-chain — with correctness proofs. No validator, no DAO authority, no other voter can see how anyone voted.
 
 ---
 
 ## Demo
+
+[![Watch the demo](https://cdn.loom.com/sessions/thumbnails/b7599bd310024a6cbef18e3b7fa0f70b-ec008c9759c7fb63-full-play.gif)](https://www.loom.com/share/b7599bd310024a6cbef18e3b7fa0f70b)
 
 | Landing | Dashboard | Voting |
 |:---:|:---:|:---:|
