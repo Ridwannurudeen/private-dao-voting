@@ -8,7 +8,7 @@ interface Props {
 }
 
 export default function WalletProviderWrapper({ children }: Props) {
-  const endpoint = process.env.NEXT_PUBLIC_SOLANA_RPC || "https://api.devnet.solana.com";
+  const endpoint = process.env.NEXT_PUBLIC_SOLANA_RPC || "https://rpc.ankr.com/solana_devnet";
   const wallets = useMemo(() => [], []);
   const connectionConfig = useMemo(
     () => ({

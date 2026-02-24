@@ -85,7 +85,7 @@ export default async function handler(
     const gateMint = new PublicKey(gateMintStr);
 
     const connection = new Connection(
-      process.env.NEXT_PUBLIC_SOLANA_RPC || clusterApiUrl("devnet"),
+      process.env.NEXT_PUBLIC_SOLANA_RPC || "https://rpc.ankr.com/solana_devnet",
       "confirmed"
     );
 
