@@ -108,16 +108,26 @@ export function Sidebar({
               <span
                 className={`w-2 h-2 rounded-full ${
                   arciumClient
-                    ? "bg-green-400 animate-heartbeat"
+                    ? arciumClient.isFallback()
+                      ? "bg-yellow-400 animate-pulse"
+                      : "bg-green-400 animate-heartbeat"
                     : DEVELOPMENT_MODE
                     ? "bg-yellow-400 animate-pulse"
                     : "bg-red-400"
                 }`}
               />
               <span className={`text-[10px] font-medium ${
-                arciumClient ? "text-green-400" : DEVELOPMENT_MODE ? "text-yellow-400" : "text-red-400"
+                arciumClient
+                  ? arciumClient.isFallback()
+                    ? "text-yellow-400"
+                    : "text-green-400"
+                  : DEVELOPMENT_MODE ? "text-yellow-400" : "text-red-400"
               }`}>
-                {arciumClient ? "Active" : DEVELOPMENT_MODE ? "Dev Mode" : "Offline"}
+                {arciumClient
+                  ? arciumClient.isFallback()
+                    ? "Awaiting MXE"
+                    : "Active"
+                  : DEVELOPMENT_MODE ? "Dev Mode" : "Offline"}
               </span>
             </div>
           </div>
