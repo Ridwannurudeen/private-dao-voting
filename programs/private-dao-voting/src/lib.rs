@@ -180,6 +180,7 @@ pub mod private_dao_voting {
         gate_mint: Pubkey,
         min_balance: u64,
         mxe_program_id: Pubkey,
+        quorum: u64,
         threshold_bps: u16,
         privacy_level: u8,
         discussion_url: String,
@@ -206,6 +207,7 @@ pub mod private_dao_voting {
         proposal.gate_mint = gate_mint;
         proposal.min_balance = min_balance;
         proposal.mxe_program_id = mxe_program_id;
+        proposal.quorum = quorum;
         proposal.threshold_bps = threshold_bps;
         proposal.privacy_level = privacy_level;
         proposal.passed = false;
@@ -531,6 +533,7 @@ pub mod private_dao_voting {
             abstain_votes: abstain_count,
             total_votes,
             winner,
+            passed: proposal.passed,
         });
 
         Ok(())
@@ -831,6 +834,7 @@ pub mod private_dao_voting {
             abstain_votes: abstain_count,
             total_votes,
             winner,
+            passed: proposal.passed,
         });
 
         Ok(())
@@ -1397,6 +1401,7 @@ pub struct ResultsRevealed {
     pub abstain_votes: u64,
     pub total_votes: u64,
     pub winner: u8,
+    pub passed: bool,
 }
 
 // ==================== ERRORS ====================
