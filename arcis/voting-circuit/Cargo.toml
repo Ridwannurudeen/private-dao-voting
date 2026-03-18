@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-arcis = { version = "0.1", features = ["mxe"] }
+arcis = { version = "0.9.2", features = ["mxe"] }
 
 [dev-dependencies]
-arcis = { version = "0.1", features = ["testing"] }
+arcis = { version = "0.9.2", features = ["testing"] }
