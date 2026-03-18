@@ -278,8 +278,14 @@ pub mod private_dao_voting {
         check_not_frozen(&ctx.accounts.program_config, ctx.program_id)?;
 
         // Validate title and description lengths
-        require!(!title.is_empty() && title.len() <= 100, VotingError::InvalidTitleLength);
-        require!(!description.is_empty() && description.len() <= 5000, VotingError::InvalidDescriptionLength);
+        require!(
+            !title.is_empty() && title.len() <= 100,
+            VotingError::InvalidTitleLength
+        );
+        require!(
+            !description.is_empty() && description.len() <= 5000,
+            VotingError::InvalidDescriptionLength
+        );
 
         // Validate V2 fields
         require!(
@@ -291,7 +297,10 @@ pub mod private_dao_voting {
 
         // Validate voting end time is in the future
         let clock = Clock::get()?;
-        require!(voting_ends_at > clock.unix_timestamp, VotingError::InvalidVotingEndTime);
+        require!(
+            voting_ends_at > clock.unix_timestamp,
+            VotingError::InvalidVotingEndTime
+        );
 
         // Initialize proposal state
         let proposal = &mut ctx.accounts.proposal;
@@ -499,7 +508,10 @@ pub mod private_dao_voting {
         tally.nonce = nonce;
 
         // Increment public vote counter with checked arithmetic
-        proposal.total_votes = proposal.total_votes.checked_add(1).ok_or(VotingError::ArithmeticOverflow)?;
+        proposal.total_votes = proposal
+            .total_votes
+            .checked_add(1)
+            .ok_or(VotingError::ArithmeticOverflow)?;
 
         Ok(())
     }
@@ -731,8 +743,14 @@ pub mod private_dao_voting {
         check_not_frozen(&ctx.accounts.program_config, ctx.program_id)?;
 
         // Validate title and description lengths
-        require!(!title.is_empty() && title.len() <= 100, VotingError::InvalidTitleLength);
-        require!(!description.is_empty() && description.len() <= 5000, VotingError::InvalidDescriptionLength);
+        require!(
+            !title.is_empty() && title.len() <= 100,
+            VotingError::InvalidTitleLength
+        );
+        require!(
+            !description.is_empty() && description.len() <= 5000,
+            VotingError::InvalidDescriptionLength
+        );
 
         // Validate V2 fields
         require!(
@@ -744,7 +762,10 @@ pub mod private_dao_voting {
 
         // Validate voting end time is in the future
         let clock = Clock::get()?;
-        require!(voting_ends_at > clock.unix_timestamp, VotingError::InvalidVotingEndTime);
+        require!(
+            voting_ends_at > clock.unix_timestamp,
+            VotingError::InvalidVotingEndTime
+        );
 
         let proposal = &mut ctx.accounts.proposal;
         proposal.id = proposal_id;
@@ -1181,7 +1202,10 @@ pub mod private_dao_voting {
         new_authority: Pubkey,
     ) -> Result<()> {
         // Prevent transferring to the zero address (system program default)
-        require!(new_authority != Pubkey::default(), VotingError::InvalidAuthority);
+        require!(
+            new_authority != Pubkey::default(),
+            VotingError::InvalidAuthority
+        );
 
         let config = &mut ctx.accounts.program_config;
 
@@ -1695,7 +1719,6 @@ pub struct InitDaoConfig<'info> {
 
     pub system_program: Program<'info, System>,
 }
-
 
 #[derive(Accounts)]
 pub struct UpdateDaoConfig<'info> {
