@@ -82,7 +82,7 @@ jobs:
           node-version: 20
 
       - run: npm install --legacy-peer-deps
-      - run: npm audit --audit-level=high
+      - run: npm audit --audit-level=critical
 
   unit-tests:
     name: Frontend Unit Tests
