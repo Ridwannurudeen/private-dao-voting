@@ -98,10 +98,13 @@ function validateSolanaPublicKey(value: string, label: string): PublicKey {
 
 // ==================== ARCIUM CLIENT ====================
 
+export type ReconnectCallback = () => void;
+
 export class ArciumClient {
   private connection: Connection;
   private provider: AnchorProvider;
   private statusCallbacks: StatusCallback[] = [];
+  private reconnectCallbacks: ReconnectCallback[] = [];
 
   private privateKey: Uint8Array;
   private publicKey: Uint8Array;
@@ -132,6 +135,24 @@ export class ArciumClient {
       const i = this.statusCallbacks.indexOf(cb);
       if (i > -1) this.statusCallbacks.splice(i, 1);
     };
+  }
+
+  /**
+   * Register a callback that fires when MXE reconnects after being
+   * in fallback mode. Use this to trigger vote queue processing.
+   */
+  onMXEReconnect(cb: ReconnectCallback): () => void {
+    this.reconnectCallbacks.push(cb);
+    return () => {
+      const i = this.reconnectCallbacks.indexOf(cb);
+      if (i > -1) this.reconnectCallbacks.splice(i, 1);
+    };
+  }
+
+  private emitReconnect(): void {
+    this.reconnectCallbacks.forEach((cb) => {
+      try { cb(); } catch (e) { console.warn("onMXEReconnect callback error:", e); }
+    });
   }
 
   private emitStatus(event: ArciumStatusEvent) {
@@ -266,6 +287,9 @@ export class ArciumClient {
         status: "IDLE",
         message: "Connected to Arcium MXE",
       });
+
+      // Notify listeners that MXE is back — triggers vote queue processing
+      this.emitReconnect();
 
       return true;
     } catch (err: any) {
@@ -528,9 +552,22 @@ export function getMempoolCapacity(): MempoolCapacity {
   return "Tiny";
 }
 
-/** Circuit hash placeholder — in production, read from deployed CompDefState */
+/**
+ * Returns the circuit hash for on-chain verification.
+ *
+ * In production: set NEXT_PUBLIC_CIRCUIT_HASH to the SHA-256 of the compiled
+ * circuit binary (matches the on-chain CIRCUIT_HASH constant computed by build.rs).
+ *
+ * To compute:
+ *   cd arcis/voting-circuit && arcis build
+ *   sha256sum target/arcis/voting_circuit.so | cut -d' ' -f1
+ *
+ * If no compiled binary is available (dev/CI), use the source hash:
+ *   sha256sum arcis/voting-circuit/src/lib.rs | cut -d' ' -f1
+ *   # => 9f175fdae79a2f2d1da57ee9833d39dead99e1396e4ed75029d01cad8956bb71
+ */
 export function getCircuitHash(): string {
-  return process.env.NEXT_PUBLIC_CIRCUIT_HASH || "dev-mode-circuit-hash-placeholder";
+  return process.env.NEXT_PUBLIC_CIRCUIT_HASH || "9f175fdae79a2f2d1da57ee9833d39dead99e1396e4ed75029d01cad8956bb71";
 }
 
 /** Arcium circuit instruction names registered on-chain */

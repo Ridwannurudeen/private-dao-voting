@@ -19,6 +19,15 @@ import {
   ensureTallyInitialized,
   devRevealResults,
   cancelProposal,
+  initProgramConfig,
+  transferAuthority,
+  freezeProgram,
+  unfreezeProgram,
+  fetchProgramConfig,
+  ProgramConfigData,
+  communityCreateProposal,
+  fetchDaoConfig,
+  DaoConfigData,
 } from "../lib/contract";
 import {
   ArciumClient,
@@ -29,6 +38,7 @@ import {
   ArciumStatusEvent,
   deriveComputationOffset,
 } from "../lib/arcium";
+import { getVoteQueue, QueuedVote } from "../lib/vote-queue";
 import { parseAnchorError, explorerTxUrl } from "../lib/errors";
 import { withRetry } from "../lib/retry";
 import { LockIcon, ShieldCheckIcon } from "../components/Icons";
@@ -98,6 +108,16 @@ export default function Home() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [devConsoleOpen, setDevConsoleOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("dashboard");
+  const [daoConfig, setDaoConfig] = useState<DaoConfigData | null>(null);
+  const [queuedCount, setQueuedCount] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    return getVoteQueue().getQueueLength();
+  });
+
+  // Program config state (mainnet readiness)
+  const [programConfig, setProgramConfig] = useState<ProgramConfigData | null>(null);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [transferTarget, setTransferTarget] = useState("");
 
   // Dev mode: track local vote tallies since MXE isn't aggregating
   const [devTallies, setDevTallies] = useState<Record<string, { yes: number; no: number; abstain: number }>>(() => {
@@ -140,6 +160,38 @@ export default function Home() {
     return () => clearInterval(i);
   }, []);
 
+  // Submit a queued vote on-chain
+  const submitQueuedVote = useCallback(async (qv: QueuedVote) => {
+    const program = getProgram();
+    if (!program || !publicKey) throw new Error("Program or wallet unavailable");
+
+    const proposalPDA = new PublicKey(qv.proposalPDA);
+    const gateMint = new PublicKey(qv.gateMint);
+
+    await devCastVote(
+      program, publicKey, proposalPDA, gateMint,
+      qv.encryptedChoice, qv.nonce, qv.voterPubkey
+    );
+
+    // Track the vote locally for dev tally
+    const key = qv.proposalPDA;
+    setDevTallies((prev) => {
+      const current = prev[key] || { yes: 0, no: 0, abstain: 0 };
+      const updated = {
+        ...prev,
+        [key]: {
+          yes: current.yes + (qv.choice === "yes" ? 1 : 0),
+          no: current.no + (qv.choice === "no" ? 1 : 0),
+          abstain: current.abstain + (qv.choice === "abstain" ? 1 : 0),
+        },
+      };
+      localStorage.setItem("devTallies", JSON.stringify(updated));
+      return updated;
+    });
+
+    setVoted((v) => ({ ...v, [key]: true }));
+  }, [getProgram, publicKey]);
+
   // Initialize ArciumClient when wallet connects
   useEffect(() => {
     if (!anchorWallet || !connected) {
@@ -162,6 +214,49 @@ export default function Home() {
 
     return () => { unsub(); };
   }, [connected, anchorWallet, connection]);
+
+  // Wire up vote queue: listen for changes and process on MXE reconnect
+  useEffect(() => {
+    const voteQueue = getVoteQueue();
+
+    // Sync queue count state with actual queue
+    const unsubQueue = voteQueue.onChange((len) => setQueuedCount(len));
+
+    // Clean expired votes on mount
+    voteQueue.clearExpiredVotes();
+
+    if (!arciumClient) return () => { unsubQueue(); };
+
+    // When MXE reconnects, process queued votes
+    const unsubReconnect = arciumClient.onMXEReconnect(async () => {
+      if (voteQueue.getQueueLength() === 0) return;
+      setToast({ message: "MXE reconnected! Processing queued votes...", type: "info" });
+      const result = await voteQueue.processQueue(submitQueuedVote);
+      if (result.succeeded.length > 0) {
+        setToast({
+          message: `${result.succeeded.length} queued vote(s) submitted successfully!`,
+          type: "success",
+        });
+      }
+      if (result.remaining > 0) {
+        setToast({
+          message: `${result.remaining} vote(s) still pending. Will retry automatically.`,
+          type: "info",
+        });
+      }
+    });
+
+    // If there are already queued votes and we're in fallback, start auto-retry
+    if (arciumClient.isFallback() && voteQueue.getQueueLength() > 0) {
+      voteQueue.startAutoRetry(submitQueuedVote);
+    }
+
+    return () => {
+      unsubQueue();
+      unsubReconnect();
+      voteQueue.stopAutoRetry();
+    };
+  }, [arciumClient, submitQueuedVote]);
 
   // Check token balances for all proposals using batch RPC
   const checkTokenBalances = useCallback(async (proposalList: Proposal[]) => {
@@ -195,6 +290,11 @@ export default function Home() {
     if (!program) return;
     // Only show loading skeleton if we have no cached proposals to display
     if (proposals.length === 0) setLoading(true);
+
+    // Load program config and DAO config in parallel (non-blocking)
+    fetchProgramConfig(program).then((config) => setProgramConfig(config)).catch(() => {});
+    fetchDaoConfig(program).then((config) => setDaoConfig(config)).catch(() => {});
+
     try {
       const discriminatorFilter: GetProgramAccountsFilter = {
         memcmp: {
@@ -355,9 +455,22 @@ export default function Home() {
     try {
       const gateMint = new PublicKey(gateMintStr);
       const minBalance = new BN(minBalanceStr);
-      const result = await withRetry(() => devCreateProposal(
-        program, publicKey, title, desc, duration, gateMint, minBalance
-      ));
+
+      let result: { tx: string; proposalId: BN; proposalPDA: PublicKey };
+
+      if (daoConfig && !DEVELOPMENT_MODE) {
+        // Community mode: anyone with sufficient governance tokens can create
+        result = await withRetry(() => communityCreateProposal(
+          program, publicKey, title, desc, duration, gateMint, minBalance,
+          daoConfig.governanceMint
+        ));
+      } else {
+        // Dev/fallback mode: authority-only proposal creation
+        result = await withRetry(() => devCreateProposal(
+          program, publicKey, title, desc, duration, gateMint, minBalance
+        ));
+      }
+
       await withRetry(() => devInitTally(program, publicKey, result.proposalPDA));
       setToast({ message: "Proposal created with tally initialized!", type: "success", txUrl: explorerTxUrl(result.tx) });
       setModal(false);
@@ -462,7 +575,54 @@ export default function Home() {
       console.error("Vote error:", e);
       setIsEncrypting(false);
       setVoteStep((s) => ({ ...s, [key]: "idle" }));
-      setToast({ message: parseAnchorError(e), type: "error" });
+
+      // If MXE is in fallback mode and the on-chain tx failed, queue for retry
+      const isMXEDown = arciumClient?.isFallback() || false;
+      const msg = e?.message || "";
+      const isNetworkError =
+        msg.includes("failed to fetch") ||
+        msg.includes("FetchError") ||
+        msg.includes("NetworkError") ||
+        msg.includes("ECONNREFUSED") ||
+        msg.includes("ETIMEDOUT") ||
+        msg.includes("503") ||
+        msg.includes("502") ||
+        msg.includes("429") ||
+        msg.includes("Blockhash not found") ||
+        msg.includes("blockhash not found") ||
+        msg.includes("cluster") ||
+        msg.includes("MXE");
+
+      if ((isMXEDown || isNetworkError) && !msg.includes("InsufficientBalance") && !msg.includes("User rejected")) {
+        // Queue the vote for retry when MXE comes back
+        const voteQueue = getVoteQueue();
+        const client = arciumClient;
+        if (client) {
+          const voteValue: 0 | 1 | 2 = choice === "yes" ? 1 : choice === "abstain" ? 2 : 0;
+          try {
+            const encryptedVote = await client.encryptVote(voteValue, proposal.publicKey, publicKey);
+            const secretInput = client.toSecretInput(encryptedVote);
+            voteQueue.enqueue({
+              proposalPDA: key,
+              encryptedChoice: secretInput.encryptedChoice,
+              nonce: secretInput.nonce,
+              voterPubkey: secretInput.voterPubkey,
+              walletPubkey: publicKey.toBase58(),
+              gateMint: proposal.gateMint.toBase58(),
+              choice,
+            });
+            voteQueue.startAutoRetry(submitQueuedVote);
+            setToast({ message: "Vote queued -- will auto-submit when MXE reconnects", type: "info" });
+          } catch {
+            // Encryption itself failed -- show original error
+            setToast({ message: parseAnchorError(e), type: "error" });
+          }
+        } else {
+          setToast({ message: parseAnchorError(e), type: "error" });
+        }
+      } else {
+        setToast({ message: parseAnchorError(e), type: "error" });
+      }
     }
     setVoting((v) => ({ ...v, [key]: false }));
   };
@@ -522,6 +682,63 @@ export default function Home() {
       setToast({ message: parseAnchorError(e), type: "error" });
     }
     setCancelling((c) => ({ ...c, [key]: false }));
+  };
+
+  // ==================== ADMIN ACTIONS (MAINNET READINESS) ====================
+
+  const isAuthority = publicKey && programConfig && programConfig.authority.equals(publicKey);
+
+  const handleInitConfig = async () => {
+    const program = getProgram();
+    if (!program || !publicKey) return;
+    setAdminLoading(true);
+    try {
+      const txSig = await initProgramConfig(program, publicKey);
+      setToast({ message: "ProgramConfig initialized.", type: "success", txUrl: explorerTxUrl(txSig) });
+      const config = await fetchProgramConfig(program);
+      setProgramConfig(config);
+    } catch (e: any) {
+      setToast({ message: parseAnchorError(e), type: "error" });
+    }
+    setAdminLoading(false);
+  };
+
+  const handleTransferAuthority = async () => {
+    const program = getProgram();
+    if (!program || !publicKey || !transferTarget) return;
+    setAdminLoading(true);
+    try {
+      const newAuth = new PublicKey(transferTarget);
+      const txSig = await transferAuthority(program, publicKey, newAuth);
+      setToast({ message: `Authority transferred to ${newAuth.toBase58().slice(0, 8)}...`, type: "success", txUrl: explorerTxUrl(txSig) });
+      setTransferTarget("");
+      const config = await fetchProgramConfig(program);
+      setProgramConfig(config);
+    } catch (e: any) {
+      setToast({ message: parseAnchorError(e), type: "error" });
+    }
+    setAdminLoading(false);
+  };
+
+  const handleToggleFreeze = async () => {
+    const program = getProgram();
+    if (!program || !publicKey || !programConfig) return;
+    setAdminLoading(true);
+    try {
+      const txSig = programConfig.isFrozen
+        ? await unfreezeProgram(program, publicKey)
+        : await freezeProgram(program, publicKey);
+      setToast({
+        message: programConfig.isFrozen ? "Program unfrozen." : "Program frozen.",
+        type: "success",
+        txUrl: explorerTxUrl(txSig),
+      });
+      const config = await fetchProgramConfig(program);
+      setProgramConfig(config);
+    } catch (e: any) {
+      setToast({ message: parseAnchorError(e), type: "error" });
+    }
+    setAdminLoading(false);
   };
 
   const handleConfettiDone = useCallback(() => setShowConfetti(false), []);
@@ -691,6 +908,15 @@ export default function Home() {
                       : "MXE Active"
                     : DEVELOPMENT_MODE ? "Dev Mode" : "MXE Offline"}
                 </span>
+                {queuedCount > 0 && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full border bg-orange-500/10 text-orange-400 border-orange-500/20 flex items-center gap-1"
+                    title={`${queuedCount} vote(s) queued for retry when MXE reconnects`}>
+                    <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                    </svg>
+                    {queuedCount} queued
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -701,6 +927,80 @@ export default function Home() {
 
           {/* Main scrollable content */}
           <div id="section-dashboard" className="px-6 py-6 space-y-6" role="main" aria-label="Governance proposals">
+
+            {/* Frozen banner */}
+            {programConfig?.isFrozen && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-center gap-3">
+                <svg className="w-5 h-5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <p className="text-sm text-amber-300">Governance is temporarily paused. New proposals and votes are blocked until the program authority unfreezes the system.</p>
+              </div>
+            )}
+
+            {/* Admin panel — only visible to the program authority */}
+            {isAuthority && (
+              <div className="glass-card-elevated p-5 space-y-4 border border-purple-500/20">
+                <div className="flex items-center gap-2 mb-1">
+                  <ShieldCheckIcon className="w-4 h-4 text-purple-400" />
+                  <h3 className="text-sm font-display font-semibold text-purple-300 uppercase tracking-wider">Admin Panel</h3>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {/* Freeze / Unfreeze toggle */}
+                  <button
+                    onClick={handleToggleFreeze}
+                    disabled={adminLoading}
+                    className={`px-4 py-2 text-sm rounded-lg border transition-all disabled:opacity-50 ${
+                      programConfig?.isFrozen
+                        ? "bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20"
+                        : "bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20"
+                    }`}
+                  >
+                    {programConfig?.isFrozen ? "Unfreeze Program" : "Freeze Program"}
+                  </button>
+                </div>
+
+                {/* Transfer authority */}
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    placeholder="New authority pubkey (e.g., Squads multisig)..."
+                    value={transferTarget}
+                    onChange={(e) => setTransferTarget(e.target.value)}
+                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/40"
+                  />
+                  <button
+                    onClick={handleTransferAuthority}
+                    disabled={adminLoading || !transferTarget}
+                    className="px-4 py-2 text-sm rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/30 hover:bg-purple-500/20 transition-all disabled:opacity-50 whitespace-nowrap"
+                  >
+                    Transfer Authority
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-gray-500">
+                  Authority: {programConfig?.authority.toBase58().slice(0, 16)}...
+                  {programConfig?.isFrozen ? " | Status: FROZEN" : " | Status: Active"}
+                </p>
+              </div>
+            )}
+
+            {/* Init ProgramConfig — shown if config doesn't exist and user is connected */}
+            {!programConfig && connected && (
+              <div className="glass-card p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 border border-white/5">
+                <p className="text-xs text-gray-400 flex-1">ProgramConfig not initialized. Initialize it to enable freeze controls and authority transfer.</p>
+                <button
+                  onClick={handleInitConfig}
+                  disabled={adminLoading}
+                  className="px-3 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition-all disabled:opacity-50"
+                >
+                  Initialize Config
+                </button>
+              </div>
+            )}
+
             {/* Action bar */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
