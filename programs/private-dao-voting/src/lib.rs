@@ -165,23 +165,30 @@ fn build_args_for_tally(tally: [u8; 128]) -> ArgumentList {
 }
 
 /// Check if voter has an active delegation. Returns error if delegation exists.
-/// Looks up the delegation PDA — if it exists and is owned by this program,
-/// the voter must revoke it before voting directly.
+/// Derives the delegation PDA deterministically and checks on-chain state.
+/// The delegation account must be passed to the instruction so we can inspect it.
+/// If it exists (has data) and is owned by this program, the voter has an active
+/// delegation and must revoke it before voting directly.
 fn check_no_active_delegation(
+    delegation_account: &AccountInfo,
     voter: &Pubkey,
-    remaining_accounts: &[AccountInfo],
     program_id: &Pubkey,
 ) -> Result<()> {
-    let (delegation_pda, _) =
+    // Derive the expected delegation PDA for this voter
+    let (expected_pda, _) =
         Pubkey::find_program_address(&[DELEGATION_SEED, voter.as_ref()], program_id);
-    if let Some(acct) = remaining_accounts
-        .iter()
-        .find(|a| a.key() == delegation_pda)
-    {
-        if acct.data_len() > 0 && acct.owner == program_id {
-            return Err(VotingError::ActiveDelegation.into());
-        }
+
+    // Validate the passed account matches the deterministically derived PDA
+    require!(
+        delegation_account.key() == expected_pda,
+        VotingError::InvalidDelegationAccount
+    );
+
+    // If the account has data and is owned by this program, delegation is active
+    if delegation_account.data_len() > 0 && delegation_account.owner == program_id {
+        return Err(VotingError::ActiveDelegation.into());
     }
+
     Ok(())
 }
 
@@ -326,8 +333,8 @@ pub mod private_dao_voting {
 
         // Check no active delegation — delegators must revoke before voting directly
         check_no_active_delegation(
+            &ctx.accounts.delegation_account,
             &ctx.accounts.voter.key(),
-            ctx.remaining_accounts,
             ctx.program_id,
         )?;
 
@@ -497,6 +504,12 @@ pub mod private_dao_voting {
             .ok_or(VotingError::ArithmeticOverflow)?;
         require!(
             computed_total == total_votes,
+            VotingError::VoteTallyMismatch
+        );
+
+        // Validate total against on-chain vote counter to prevent fabricated counts
+        require!(
+            total_votes == proposal.total_votes,
             VotingError::VoteTallyMismatch
         );
 
@@ -722,8 +735,8 @@ pub mod private_dao_voting {
 
         // Check no active delegation — delegators must revoke before voting directly
         check_no_active_delegation(
+            &ctx.accounts.delegation_account,
             &ctx.accounts.voter.key(),
-            ctx.remaining_accounts,
             ctx.program_id,
         )?;
 
@@ -792,6 +805,12 @@ pub mod private_dao_voting {
             .checked_add(no_count)
             .and_then(|x| x.checked_add(abstain_count))
             .ok_or(VotingError::ArithmeticOverflow)?;
+
+        // Validate total against on-chain vote counter to prevent fabricated counts
+        require!(
+            total_votes == proposal.total_votes,
+            VotingError::VoteTallyMismatch
+        );
 
         // Check quorum if set
         if proposal.quorum > 0 {
@@ -959,7 +978,11 @@ pub struct CastVote<'info> {
     #[account(mut)]
     pub proposal: Account<'info, Proposal>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [TALLY_SEED, proposal.key().as_ref()],
+        bump,
+    )]
     pub tally: Account<'info, Tally>,
 
     #[account(
@@ -976,6 +999,11 @@ pub struct CastVote<'info> {
         bump
     )]
     pub vote_record: Account<'info, VoteRecord>,
+
+    /// CHECK: Delegation PDA for the voter — derived deterministically.
+    /// If this account has data and is owned by the program, the voter has
+    /// an active delegation and cannot vote directly.
+    pub delegation_account: AccountInfo<'info>,
 
     /// CHECK: Sign PDA
     #[account(seeds = [SIGN_SEED], bump)]
@@ -1019,7 +1047,8 @@ pub struct VoteCallback<'info> {
 
     #[account(
         mut,
-        constraint = tally.proposal == proposal.key()
+        seeds = [TALLY_SEED, proposal.key().as_ref()],
+        bump,
     )]
     pub tally: Account<'info, Tally>,
 
@@ -1040,6 +1069,10 @@ pub struct RevealResults<'info> {
     #[account(mut)]
     pub proposal: Account<'info, Proposal>,
 
+    #[account(
+        seeds = [TALLY_SEED, proposal.key().as_ref()],
+        bump,
+    )]
     pub tally: Account<'info, Tally>,
 
     /// CHECK: Sign PDA
@@ -1171,7 +1204,11 @@ pub struct DevCastVote<'info> {
     #[account(mut)]
     pub proposal: Account<'info, Proposal>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [TALLY_SEED, proposal.key().as_ref()],
+        bump,
+    )]
     pub tally: Account<'info, Tally>,
 
     #[account(
@@ -1189,6 +1226,11 @@ pub struct DevCastVote<'info> {
     )]
     pub vote_record: Account<'info, VoteRecord>,
 
+    /// CHECK: Delegation PDA for the voter — derived deterministically.
+    /// If this account has data and is owned by the program, the voter has
+    /// an active delegation and cannot vote directly.
+    pub delegation_account: AccountInfo<'info>,
+
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
@@ -1200,6 +1242,12 @@ pub struct DevRevealResults<'info> {
 
     #[account(mut)]
     pub proposal: Account<'info, Proposal>,
+
+    #[account(
+        seeds = [TALLY_SEED, proposal.key().as_ref()],
+        bump,
+    )]
+    pub tally: Account<'info, Tally>,
 }
 
 #[derive(Accounts)]
@@ -1453,4 +1501,6 @@ pub enum VotingError {
     CircuitHashMismatch,
     #[msg("Results already revealed")]
     AlreadyRevealed,
+    #[msg("Invalid delegation account: does not match expected PDA")]
+    InvalidDelegationAccount,
 }

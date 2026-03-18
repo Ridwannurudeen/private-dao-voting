@@ -46,7 +46,7 @@ export function parseAnchorError(error: any): string {
   }
 
   // Check for common Solana errors
-  if (msg.includes("0x1")) return "Insufficient SOL balance for transaction fees.";
+  if (/custom program error: 0x1\b/.test(msg)) return "Insufficient SOL balance for transaction fees.";
   if (msg.includes("already in use") || msg.includes("already been processed"))
     return "This action has already been completed.";
   if (msg.includes("blockhash not found"))
@@ -59,6 +59,8 @@ export function parseAnchorError(error: any): string {
   return msg;
 }
 
+const cluster = process.env.NEXT_PUBLIC_NETWORK || "devnet";
+
 export function explorerTxUrl(signature: string): string {
-  return `https://explorer.solana.com/tx/${signature}?cluster=devnet`;
+  return `https://explorer.solana.com/tx/${signature}?cluster=${cluster}`;
 }

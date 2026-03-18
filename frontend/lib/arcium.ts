@@ -334,14 +334,11 @@ export class ArciumClient {
    * Convert an EncryptedVote into the number-array format expected by
    * the on-chain program's instruction arguments.
    */
-  toSecretInput(
-    encryptedVote: EncryptedVote,
-    voterPubkey: PublicKey
-  ): SecretInput {
+  toSecretInput(encryptedVote: EncryptedVote): SecretInput {
     return {
       encryptedChoice: Array.from(encryptedVote.ciphertext),
       nonce: Array.from(encryptedVote.nonce),
-      voterPubkey: Array.from(voterPubkey.toBytes()),
+      voterPubkey: Array.from(this.publicKey),
     };
   }
 

@@ -237,12 +237,10 @@ export async function devCastVote(
         tally: tallyPDA,
         voterTokenAccount,
         voteRecord: voteRecordPDA,
+        delegationAccount: findDelegationPDA(voter)[0],
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })
-      .remainingAccounts([
-        { pubkey: findDelegationPDA(voter)[0], isSigner: false, isWritable: false }
-      ])
       .rpc(TX_OPTS)
   );
 }
@@ -283,6 +281,7 @@ export async function castVoteWithArcium(
         tally: tallyPDA,
         voterTokenAccount,
         voteRecord: voteRecordPDA,
+        delegationAccount: findDelegationPDA(voter)[0],
         computationOffsetAccount: computationOffsetPDA,
         signSeed: arciumAccounts.signSeed,
         arciumProgram: arciumAccounts.arciumProgram,
@@ -297,9 +296,6 @@ export async function castVoteWithArcium(
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })
-      .remainingAccounts([
-        { pubkey: findDelegationPDA(voter)[0], isSigner: false, isWritable: false }
-      ])
       .rpc(TX_OPTS)
   );
 }
@@ -319,6 +315,7 @@ export async function devRevealResults(
       .accounts({
         authority,
         proposal: proposalPDA,
+        tally: findTallyPDA(proposalPDA)[0],
       })
       .rpc(TX_OPTS)
   );

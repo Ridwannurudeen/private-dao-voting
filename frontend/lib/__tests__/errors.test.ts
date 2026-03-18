@@ -45,7 +45,7 @@ describe("parseAnchorError", () => {
     });
 
     it("handles common Solana errors", () => {
-        expect(parseAnchorError({ message: "custom 0x1 error" })).toBe(
+        expect(parseAnchorError({ message: "custom program error: 0x1" })).toBe(
             "Insufficient SOL balance for transaction fees."
         );
         expect(parseAnchorError({ message: "already in use" })).toBe(
@@ -56,6 +56,19 @@ describe("parseAnchorError", () => {
         );
         expect(parseAnchorError({ message: "User rejected the request" })).toBe(
             "Transaction was cancelled."
+        );
+    });
+
+    it("does not false-positive on 0x10, 0x1a, 0x100, etc.", () => {
+        // These should NOT match the 0x1 SOL-fee error
+        expect(parseAnchorError({ message: "custom program error: 0x10" })).not.toBe(
+            "Insufficient SOL balance for transaction fees."
+        );
+        expect(parseAnchorError({ message: "custom program error: 0x1a" })).not.toBe(
+            "Insufficient SOL balance for transaction fees."
+        );
+        expect(parseAnchorError({ message: "custom program error: 0x100" })).not.toBe(
+            "Insufficient SOL balance for transaction fees."
         );
     });
 
