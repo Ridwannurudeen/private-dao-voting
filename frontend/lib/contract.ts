@@ -240,6 +240,9 @@ export async function devCastVote(
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })
+      .remainingAccounts([
+        { pubkey: findDelegationPDA(voter)[0], isSigner: false, isWritable: false }
+      ])
       .rpc(TX_OPTS)
   );
 }
@@ -294,6 +297,9 @@ export async function castVoteWithArcium(
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })
+      .remainingAccounts([
+        { pubkey: findDelegationPDA(voter)[0], isSigner: false, isWritable: false }
+      ])
       .rpc(TX_OPTS)
   );
 }
