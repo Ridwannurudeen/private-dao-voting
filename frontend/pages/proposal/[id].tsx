@@ -322,7 +322,7 @@ export default function ProposalDetail() {
       setToast({ message: "Gate tokens claimed! You can now vote.", type: "success" });
       reload();
     } catch (e: any) {
-      setToast({ message: e.message || "Failed to claim tokens", type: "error" });
+      setToast({ message: parseAnchorError(e), type: "error" });
     }
     setClaiming(false);
   };
