@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useWallet, useConnection, useAnchorWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { AnchorProvider, Program, BN, Idl } from "@coral-xyz/anchor";
@@ -76,14 +76,22 @@ export default function Home() {
       const cached = sessionStorage.getItem("cachedProposals");
       if (cached) {
         const parsed = JSON.parse(cached);
-        // Rehydrate PublicKey and BN objects
-        return parsed.map((p: any) => ({
-          ...p,
-          publicKey: new PublicKey(p.publicKey),
-          id: new BN(p.id),
-          authority: new PublicKey(p.authority),
-          gateMint: new PublicKey(p.gateMint),
-        }));
+        // Rehydrate PublicKey and BN objects, filtering out any that fail
+        return parsed
+          .map((p: any) => {
+            try {
+              return {
+                ...p,
+                publicKey: new PublicKey(p.publicKey),
+                id: new BN(p.id),
+                authority: new PublicKey(p.authority),
+                gateMint: new PublicKey(p.gateMint),
+              };
+            } catch {
+              return null;
+            }
+          })
+          .filter(Boolean);
       }
     } catch {}
     return [];
@@ -146,7 +154,6 @@ export default function Home() {
     if (!anchorWallet) return null;
     const provider = new AnchorProvider(connection, anchorWallet, {
       commitment: "confirmed",
-      skipPreflight: true,
       preflightCommitment: "processed",
     });
     return new Program(generatedIdl as unknown as Idl, provider);
@@ -418,7 +425,7 @@ export default function Home() {
   };
 
   // Track previous connection state for disconnect detection
-  const [wasConnected, setWasConnected] = useState(false);
+  const wasConnectedRef = useRef(false);
 
   // Auto-load when wallet connects (or switches accounts), clear state on disconnect
   useEffect(() => {
@@ -428,11 +435,12 @@ export default function Home() {
       setSelected({});
       setTokenBalances({});
       load();
-      setWasConnected(true);
+      wasConnectedRef.current = true;
     } else {
-      if (wasConnected) {
+      if (wasConnectedRef.current) {
         setToast({ message: "Wallet disconnected. Reconnect to continue voting.", type: "info" });
       }
+      wasConnectedRef.current = false;
       setProposals([]);
       setVoted({});
       setSelected({});
@@ -451,6 +459,16 @@ export default function Home() {
   ) => {
     const program = getProgram();
     if (!program || !publicKey) return;
+
+    if (!title.trim() || title.length > 100) {
+      setToast({ message: "Title must be 1-100 characters.", type: "error" });
+      return;
+    }
+    if (!desc.trim() || desc.length > 5000) {
+      setToast({ message: "Description must be 1-5000 characters.", type: "error" });
+      return;
+    }
+
     setCreating(true);
     try {
       const gateMint = new PublicKey(gateMintStr);

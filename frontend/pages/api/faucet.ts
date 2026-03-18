@@ -15,15 +15,32 @@ const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const MAX_CLAIMS = 3;
 const claimLog: Map<string, number[]> = new Map();
 
-function isRateLimited(wallet: string): boolean {
+function isRateLimited(key: string): boolean {
+  // Evict expired entries if map grows too large
+  if (claimLog.size > 10000) {
+    const now = Date.now();
+    for (const [k, timestamps] of claimLog) {
+      const valid = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+      if (valid.length === 0) claimLog.delete(k);
+      else claimLog.set(k, valid);
+    }
+  }
+
   const now = Date.now();
-  const claims = claimLog.get(wallet) || [];
+  const claims = claimLog.get(key) || [];
   const recent = claims.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
-  claimLog.set(wallet, recent);
+  claimLog.set(key, recent);
   if (recent.length >= MAX_CLAIMS) return true;
   recent.push(now);
-  claimLog.set(wallet, recent);
+  claimLog.set(key, recent);
   return false;
+}
+
+function recordClaim(key: string): void {
+  const now = Date.now();
+  const claims = claimLog.get(key) || [];
+  claims.push(now);
+  claimLog.set(key, claims);
 }
 
 export default async function handler(
@@ -34,24 +51,38 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { walletAddress, gateMint: requestedMint } = req.body;
+  const origin = req.headers.origin || req.headers.referer || "";
+  const allowedOrigins = ["http://localhost:3000", "https://privatedao-arcium.vercel.app"];
+  if (!allowedOrigins.some(o => origin.startsWith(o))) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  // gateMint is intentionally server-controlled, not client-supplied
+  const { walletAddress } = req.body;
   if (!walletAddress || typeof walletAddress !== "string") {
     return res.status(400).json({ error: "walletAddress is required" });
+  }
+
+  const clientIP = (req.headers["x-forwarded-for"]?.toString().split(",")[0] || req.socket.remoteAddress || "unknown").trim();
+  if (isRateLimited(`ip:${clientIP}`)) {
+    return res.status(429).json({ error: "Too many requests. Please try again later." });
   }
 
   if (isRateLimited(walletAddress)) {
     return res.status(429).json({ error: "Rate limited. Max 3 claims per 10 minutes." });
   }
 
+  recordClaim(`ip:${clientIP}`);
+
   const authoritySecret = process.env.GATE_MINT_AUTHORITY;
   if (!authoritySecret) {
-    return res.status(500).json({ error: "Faucet not configured: missing GATE_MINT_AUTHORITY" });
+    return res.status(500).json({ error: "Faucet is temporarily unavailable." });
   }
 
   // Always use the configured gate mint — the authority keypair can only mint this token
   const gateMintStr = process.env.NEXT_PUBLIC_GATE_MINT;
   if (!gateMintStr) {
-    return res.status(500).json({ error: "Faucet not configured: missing NEXT_PUBLIC_GATE_MINT" });
+    return res.status(500).json({ error: "Faucet is temporarily unavailable." });
   }
 
   // Validate the gate mint is a valid public key
@@ -113,7 +144,15 @@ export default async function handler(
   } catch (error: any) {
     console.error("Faucet error:", error);
     return res.status(500).json({
-      error: error.message || "Failed to mint tokens",
+      error: "Failed to mint tokens. Please try again later.",
     });
   }
 }
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "1kb",
+    },
+  },
+};

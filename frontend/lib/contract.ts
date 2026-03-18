@@ -113,7 +113,9 @@ export async function devCreateProposal(
   discussionUrl: string = "",
   executionDelay: number = 0
 ): Promise<{ tx: string; proposalId: BN; proposalPDA: PublicKey }> {
-  const proposalId = new BN(Date.now());
+  const proposalIdBytes = new Uint8Array(8);
+  crypto.getRandomValues(proposalIdBytes);
+  const proposalId = new BN(proposalIdBytes, "le");
   const [proposalPDA] = findProposalPDA(proposalId);
   const votingEndsAt = new BN(Math.floor(Date.now() / 1000) + durationSeconds);
 
@@ -687,7 +689,9 @@ export async function communityCreateProposal(
   discussionUrl: string = "",
   executionDelay: number = 0
 ): Promise<{ tx: string; proposalId: BN; proposalPDA: PublicKey }> {
-  const proposalId = new BN(Date.now());
+  const proposalIdBytes = new Uint8Array(8);
+  crypto.getRandomValues(proposalIdBytes);
+  const proposalId = new BN(proposalIdBytes, "le");
   const [proposalPDA] = findProposalPDA(proposalId);
   const [daoConfigPDA] = findDaoConfigPDA();
   const votingEndsAt = new BN(Math.floor(Date.now() / 1000) + durationSeconds);

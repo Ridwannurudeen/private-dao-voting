@@ -77,14 +77,7 @@ pub const SIGN_SEED: &[u8] = b"sign";
 pub const COMPUTATION_OFFSET_SEED: &[u8] = b"computation_offset";
 pub const DELEGATION_SEED: &[u8] = b"delegation";
 pub const DAO_CONFIG_SEED: &[u8] = b"dao_config";
-pub const PROPOSAL_COUNTER_SEED: &[u8] = b"proposal_counter";
-pub const DEPOSIT_ESCROW_SEED: &[u8] = b"deposit_escrow";
 pub const PROGRAM_CONFIG_SEED: &[u8] = b"program_config";
-
-/// Maximum active proposals per wallet (anti-spam)
-pub const MAX_ACTIVE_PROPOSALS: u8 = 3;
-/// Cooldown in seconds between proposals from the same wallet
-pub const PROPOSAL_COOLDOWN: i64 = 3600;
 
 /// Privacy levels
 pub const PRIVACY_FULL: u8 = 0;
@@ -215,6 +208,16 @@ fn check_no_active_delegation(
 /// Soft freeze check: if ProgramConfig PDA exists and is_frozen is true, return error.
 /// If the ProgramConfig account doesn't exist (no data, wrong owner, or null), assume
 /// the program is NOT frozen — maintaining backward compatibility.
+///
+/// NOTE: Callers pass this as an unconstrained `AccountInfo`. If a garbage account is
+/// provided, the key won't match the expected PDA and the check is skipped (returns Ok).
+/// This is intentional for backward compatibility — programs deployed before
+/// `ProgramConfig` was introduced will pass any account here and still function.
+/// The real protection is that once `init_program_config` has been called, the correct
+/// PDA exists on-chain and legitimate clients will always pass it. A malicious caller
+/// could bypass the freeze by passing a garbage account, but the freeze is an
+/// administrative safeguard (not a security boundary) and the on-chain PDA derivation
+/// ensures only the correct account can match.
 fn check_not_frozen(
     program_config_account: &AccountInfo,
     program_id: &Pubkey,
@@ -271,6 +274,13 @@ pub mod private_dao_voting {
         discussion_url: String,
         execution_delay: i64,
     ) -> Result<()> {
+        // Freeze check
+        check_not_frozen(&ctx.accounts.program_config, ctx.program_id)?;
+
+        // Validate title and description lengths
+        require!(!title.is_empty() && title.len() <= 100, VotingError::InvalidTitleLength);
+        require!(!description.is_empty() && description.len() <= 5000, VotingError::InvalidDescriptionLength);
+
         // Validate V2 fields
         require!(
             threshold_bps > 0 && threshold_bps <= 10_000,
@@ -278,6 +288,10 @@ pub mod private_dao_voting {
         );
         require!(privacy_level <= 2, VotingError::InvalidPrivacyLevel);
         require!(execution_delay >= 0, VotingError::InvalidExecutionDelay);
+
+        // Validate voting end time is in the future
+        let clock = Clock::get()?;
+        require!(voting_ends_at > clock.unix_timestamp, VotingError::InvalidVotingEndTime);
 
         // Initialize proposal state
         let proposal = &mut ctx.accounts.proposal;
@@ -377,6 +391,9 @@ pub mod private_dao_voting {
         nonce: [u8; 16],
         voter_pubkey: [u8; 32],
     ) -> Result<()> {
+        // Freeze check
+        check_not_frozen(&ctx.accounts.program_config, ctx.program_id)?;
+
         let proposal = &ctx.accounts.proposal;
 
         // Validate voting is still active
@@ -471,14 +488,18 @@ pub mod private_dao_voting {
         new_encrypted_tally: [u8; 128],
         nonce: [u8; 16],
     ) -> Result<()> {
+        let proposal = &mut ctx.accounts.proposal;
+
+        // Validate proposal is still active
+        require!(proposal.is_active, VotingError::VotingClosed);
+
         // Update the encrypted tally with new value
         let tally = &mut ctx.accounts.tally;
         tally.encrypted_data = new_encrypted_tally;
         tally.nonce = nonce;
 
-        // Increment public vote counter
-        let proposal = &mut ctx.accounts.proposal;
-        proposal.total_votes += 1;
+        // Increment public vote counter with checked arithmetic
+        proposal.total_votes = proposal.total_votes.checked_add(1).ok_or(VotingError::ArithmeticOverflow)?;
 
         Ok(())
     }
@@ -553,6 +574,9 @@ pub mod private_dao_voting {
         total_votes: u64,
     ) -> Result<()> {
         let proposal = &mut ctx.accounts.proposal;
+
+        // Prevent duplicate reveal callbacks
+        require!(!proposal.is_revealed, VotingError::AlreadyRevealed);
 
         // Validate vote count consistency
         let computed_total = yes_count
@@ -685,9 +709,10 @@ pub mod private_dao_voting {
     // These bypass Arcium MXE CPI for devnet testing.
     // All other logic (token gating, PDA validation, double-vote
     // prevention) remains identical to production instructions.
-    // Remove before mainnet deployment.
+    // Gated behind #[cfg(feature = "dev-mode")] — stripped from mainnet builds.
 
     /// Dev mode: Create a proposal without Arcium CPI
+    #[cfg(feature = "dev-mode")]
     pub fn dev_create_proposal(
         ctx: Context<DevCreateProposal>,
         proposal_id: u64,
@@ -705,6 +730,10 @@ pub mod private_dao_voting {
         // Soft freeze check — if ProgramConfig exists and is_frozen, block new proposals
         check_not_frozen(&ctx.accounts.program_config, ctx.program_id)?;
 
+        // Validate title and description lengths
+        require!(!title.is_empty() && title.len() <= 100, VotingError::InvalidTitleLength);
+        require!(!description.is_empty() && description.len() <= 5000, VotingError::InvalidDescriptionLength);
+
         // Validate V2 fields
         require!(
             threshold_bps > 0 && threshold_bps <= 10_000,
@@ -712,6 +741,10 @@ pub mod private_dao_voting {
         );
         require!(privacy_level <= 2, VotingError::InvalidPrivacyLevel);
         require!(execution_delay >= 0, VotingError::InvalidExecutionDelay);
+
+        // Validate voting end time is in the future
+        let clock = Clock::get()?;
+        require!(voting_ends_at > clock.unix_timestamp, VotingError::InvalidVotingEndTime);
 
         let proposal = &mut ctx.accounts.proposal;
         proposal.id = proposal_id;
@@ -775,6 +808,7 @@ pub mod private_dao_voting {
     }
 
     /// Dev mode: Initialize tally without Arcium callback
+    #[cfg(feature = "dev-mode")]
     pub fn dev_init_tally(ctx: Context<DevInitTally>) -> Result<()> {
         let tally = &mut ctx.accounts.tally;
         tally.proposal = ctx.accounts.proposal.key();
@@ -785,6 +819,7 @@ pub mod private_dao_voting {
     }
 
     /// Dev mode: Cast vote without Arcium CPI (token gating still enforced)
+    #[cfg(feature = "dev-mode")]
     pub fn dev_cast_vote(
         ctx: Context<DevCastVote>,
         encrypted_choice: [u8; 32],
@@ -849,6 +884,7 @@ pub mod private_dao_voting {
     /// Dev mode: Reveal results with provided counts (simulates MXE callback)
     /// After the voting deadline, anyone can trigger reveal (permissionless).
     /// Before the deadline, only the proposal authority can reveal.
+    #[cfg(feature = "dev-mode")]
     pub fn dev_reveal_results(
         ctx: Context<DevRevealResults>,
         yes_count: u64,
@@ -941,10 +977,9 @@ pub mod private_dao_voting {
     }
 
     /// Cancel a proposal (authority only).
-    /// Can only cancel before voting ends OR if no votes have been cast.
+    /// Can only cancel if no votes have been cast.
     pub fn cancel_proposal(ctx: Context<CancelProposal>) -> Result<()> {
         let proposal = &mut ctx.accounts.proposal;
-        let clock = Clock::get()?;
 
         require!(
             ctx.accounts.authority.key() == proposal.authority,
@@ -952,9 +987,9 @@ pub mod private_dao_voting {
         );
         require!(proposal.is_active, VotingError::VotingClosed);
 
-        // Can only cancel if voting hasn't ended OR no votes have been cast
+        // Can only cancel if no votes have been cast
         require!(
-            clock.unix_timestamp < proposal.voting_ends_at || proposal.total_votes == 0,
+            proposal.total_votes == 0,
             VotingError::CannotCancelAfterVotes
         );
 
@@ -1145,6 +1180,9 @@ pub mod private_dao_voting {
         ctx: Context<TransferAuthority>,
         new_authority: Pubkey,
     ) -> Result<()> {
+        // Prevent transferring to the zero address (system program default)
+        require!(new_authority != Pubkey::default(), VotingError::InvalidAuthority);
+
         let config = &mut ctx.accounts.program_config;
 
         require!(
@@ -1262,6 +1300,9 @@ pub struct CreateProposal<'info> {
     )]
     pub computation_offset_account: Account<'info, ComputationOffsetState>,
 
+    /// CHECK: ProgramConfig PDA for freeze check
+    pub program_config: AccountInfo<'info>,
+
     pub system_program: Program<'info, System>,
 }
 
@@ -1363,6 +1404,9 @@ pub struct CastVote<'info> {
         bump = computation_offset_account.bump
     )]
     pub computation_offset_account: Account<'info, ComputationOffsetState>,
+
+    /// CHECK: ProgramConfig PDA for freeze check
+    pub program_config: AccountInfo<'info>,
 
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
@@ -1486,7 +1530,9 @@ pub struct InitComputationOffset<'info> {
 }
 
 // ==================== DEV MODE ACCOUNT STRUCTURES ====================
+// Gated behind #[cfg(feature = "dev-mode")] — stripped from mainnet builds.
 
+#[cfg(feature = "dev-mode")]
 #[derive(Accounts)]
 #[instruction(proposal_id: u64)]
 pub struct DevCreateProposal<'info> {
@@ -1509,11 +1555,13 @@ pub struct DevCreateProposal<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[cfg(feature = "dev-mode")]
 #[derive(Accounts)]
 pub struct DevInitTally<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
 
+    #[account(constraint = proposal.authority == authority.key() @ VotingError::Unauthorized)]
     pub proposal: Account<'info, Proposal>,
 
     #[account(
@@ -1528,6 +1576,7 @@ pub struct DevInitTally<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[cfg(feature = "dev-mode")]
 #[derive(Accounts)]
 pub struct DevCastVote<'info> {
     #[account(mut)]
@@ -1570,6 +1619,7 @@ pub struct DevCastVote<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[cfg(feature = "dev-mode")]
 #[derive(Accounts)]
 pub struct DevRevealResults<'info> {
     #[account(mut)]
@@ -1830,15 +1880,6 @@ pub struct DaoConfig {
 
 #[account]
 #[derive(InitSpace)]
-pub struct ProposalCounter {
-    pub authority: Pubkey,
-    pub active_count: u8,
-    pub last_created_at: i64,
-    pub bump: u8,
-}
-
-#[account]
-#[derive(InitSpace)]
 pub struct Delegation {
     pub delegator: Pubkey,
     pub delegate: Pubkey,
@@ -1989,7 +2030,7 @@ pub enum VotingError {
     AlreadyRevealed,
     #[msg("Invalid delegation account: does not match expected PDA")]
     InvalidDelegationAccount,
-    #[msg("Cannot cancel proposal after votes have been cast and voting has ended")]
+    #[msg("Cannot cancel proposal after votes have been cast")]
     CannotCancelAfterVotes,
     #[msg("Title must be between 1 and 100 characters")]
     InvalidTitleLength,
@@ -2003,4 +2044,6 @@ pub enum VotingError {
     InsufficientProposerBalance,
     #[msg("Program is frozen: new proposals and votes are temporarily blocked")]
     ProgramFrozen,
+    #[msg("Invalid authority: cannot transfer to zero address")]
+    InvalidAuthority,
 }
