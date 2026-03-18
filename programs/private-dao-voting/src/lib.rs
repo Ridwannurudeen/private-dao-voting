@@ -101,8 +101,19 @@ pub const VOTE_COUNT_COMP: &str = "get_vote_count";
 /// Used to verify MPC logic integrity during computation definition initialization.
 /// If any node attempts to run a modified circuit, the hash mismatch is detected.
 ///
-/// In production: `circuit_hash!("voting-circuit")` reads from `build/voting-circuit.hash`
-/// In dev/test: hardcoded placeholder (circuit isn't compiled during `anchor build`)
+/// In production: set this to the SHA-256 hex digest of the compiled circuit bytecode.
+/// Generate with: `sha256sum arcis/voting-circuit/build/voting-circuit.so | cut -d' ' -f1`
+///
+/// In dev/test: hardcoded placeholder (circuit isn't compiled during `anchor build`).
+/// Build with `--no-default-features` to disable dev-mode for production deployments.
+///
+/// TODO: When the `circuit_hash!` macro becomes available in `arcium-client`,
+/// replace the production arm with: `circuit_hash!("voting-circuit")`
+/// (currently the macro is only exported by the `arcis` crate for circuit code).
+#[cfg(not(feature = "dev-mode"))]
+pub const CIRCUIT_HASH: &str = "REPLACE_WITH_REAL_CIRCUIT_HASH_BEFORE_DEPLOYMENT";
+
+#[cfg(feature = "dev-mode")]
 pub const CIRCUIT_HASH: &str = "dev-mode-circuit-hash-placeholder";
 
 fn split_ciphertext_128(data: [u8; 128]) -> [[u8; 32]; 4] {
