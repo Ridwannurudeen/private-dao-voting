@@ -315,7 +315,7 @@ export async function devRevealResults(
 ): Promise<string> {
   return await rpcWithErrorFix(() =>
     program.methods
-      .devRevealResults(yesCount, noCount, abstainCount)
+      .devRevealResults(new BN(yesCount), new BN(noCount), new BN(abstainCount))
       .accounts({
         authority,
         proposal: proposalPDA,
