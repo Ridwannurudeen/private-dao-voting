@@ -102,7 +102,13 @@ export default function Home() {
     try { return JSON.parse(localStorage.getItem("devTallies") || "{}"); } catch { return {}; }
   });
 
-  const [hiddenProposals, setHiddenProposals] = useState<Set<string>>(new Set());
+  const [hiddenProposals, setHiddenProposals] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const stored = localStorage.getItem('hiddenProposals');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch { return new Set(); }
+  });
 
   const toggleHideProposal = (key: string) => {
     setHiddenProposals((prev) => {
@@ -398,7 +404,7 @@ export default function Home() {
       const voteValue: 0 | 1 | 2 = choice === "yes" ? 1 : choice === "abstain" ? 2 : 0;
       setIsEncrypting(true);
       const encryptedVote = await client.encryptVote(voteValue, proposal.publicKey, publicKey);
-      const secretInput = client.toSecretInput(encryptedVote, publicKey);
+      const secretInput = client.toSecretInput(encryptedVote);
       setIsEncrypting(false);
       setVoteStep((s) => ({ ...s, [key]: "submitting" }));
 
