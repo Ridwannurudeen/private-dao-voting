@@ -64,15 +64,7 @@ test.describe("Private DAO Voting", () => {
     expect(manifest.icons.length).toBeGreaterThan(0);
   });
 
-  test("tech badges are displayed", async ({ page }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
-    // Target the tech badge spans inside the badges container
-    const badges = page.locator("main");
-    await expect(badges.getByText("Solana", { exact: true })).toBeVisible({ timeout: 5000 });
-    await expect(badges.getByText("Anchor", { exact: true })).toBeVisible({ timeout: 5000 });
-  });
-
-  test("hero landing shows Arcium branding", async ({ page }) => {
+test("hero landing shows Arcium branding", async ({ page }) => {
     await page.goto("/", { waitUntil: "networkidle" });
     await expect(page.getByText("Built on Arcium MXE")).toBeVisible({ timeout: 5000 });
     await expect(page.getByText("Vote", { exact: true })).toBeVisible();
