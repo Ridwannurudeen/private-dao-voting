@@ -16,7 +16,7 @@ export function DashboardLayout({
   onToggleSidebar,
 }: DashboardLayoutProps) {
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden max-w-[100vw]">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
@@ -39,7 +39,7 @@ export function DashboardLayout({
         {/* Mobile hamburger */}
         <button
           onClick={onToggleSidebar}
-          className="lg:hidden fixed top-3 left-3 z-40 w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all"
+          className="lg:hidden fixed top-3 left-3 z-40 w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all"
           aria-label="Toggle sidebar"
         >
           <svg className="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

@@ -2,6 +2,7 @@ import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { Program, AnchorProvider, BN, Idl } from "@coral-xyz/anchor";
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { withRetry } from "./retry";
+import { parseAnchorError } from "./errors";
 
 // Deployed program ID
 export const PROGRAM_ID = new PublicKey("71tbXM3A2j5pKHfjtu1LYgY8jfQWuoZtHecDu6F6EPJH");
@@ -28,16 +29,23 @@ async function rpcWithErrorFix<T>(fn: () => Promise<T>): Promise<T> {
       const logError = logs?.find((l: string) =>
         l.includes("Error") || l.includes("failed") || l.includes("custom program error")
       );
-      const wrapped = new Error(
+      const rawMessage =
         logError?.replace(/^Program log: /, "") ||
         err?.transactionMessage ||
-        "Transaction failed on-chain. Check account state and token balance."
-      );
+        "Transaction failed on-chain. Check account state and token balance.";
+      const wrapped = new Error(parseAnchorError(rawMessage));
       (wrapped as any).logs = logs;
       throw wrapped;
     }
     // Attach logs to any error for better debugging
     if (logs && !err.logs) err.logs = logs;
+    // Map the error message to a friendly one before re-throwing
+    const friendly = parseAnchorError(err);
+    if (friendly !== msg) {
+      const mapped = new Error(friendly);
+      (mapped as any).logs = err.logs;
+      throw mapped;
+    }
     throw err;
   }
 }

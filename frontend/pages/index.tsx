@@ -309,7 +309,7 @@ export default function Home() {
       await checkTokenBalances(proposals);
     } catch (e: any) {
       console.error("Claim error:", e);
-      setToast({ message: e.message || "Failed to claim tokens", type: "error" });
+      setToast({ message: parseAnchorError(e), type: "error" });
     }
     setClaiming((c) => ({ ...c, [key]: false }));
   };
@@ -501,14 +501,14 @@ export default function Home() {
   useKeyboardShortcuts(shortcutHandlers);
 
   return (
-    <div className="min-h-screen bg-mesh">
+    <div className="min-h-screen bg-mesh overflow-x-hidden">
       {!connected ? (
         /* ==================== HERO LANDING (unchanged) ==================== */
         <>
           <header className="sticky top-0 z-40 backdrop-blur-xl" role="banner" style={{ background: 'rgba(10, 10, 26, 0.85)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
             <div className="max-w-6xl mx-auto flex justify-between items-center px-4 sm:px-6 py-3">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 glow-purple" style={{ background: 'linear-gradient(135deg, rgba(147,51,234,0.3), rgba(34,211,238,0.2))' }}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 glow-purple" style={{ background: 'linear-gradient(135deg, rgba(147,51,234,0.3), rgba(34,211,238,0.2))' }} aria-hidden="true">
                   <ShieldCheckIcon className="w-5 h-5 text-cyan-400" />
                 </div>
                 <div className="min-w-0">
@@ -525,16 +525,16 @@ export default function Home() {
             </div>
           </header>
 
-          <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8" role="main">
+          <main id="main-content" className="max-w-6xl mx-auto px-4 sm:px-6 py-8" role="main">
             <div className="relative overflow-hidden">
-              <div className="orb orb-purple w-[400px] h-[400px] -top-32 -left-32" />
-              <div className="orb orb-cyan w-[300px] h-[300px] top-20 right-0" />
-              <div className="orb orb-blue w-[250px] h-[250px] bottom-0 left-1/3" />
+              <div className="orb orb-purple w-[200px] h-[200px] sm:w-[400px] sm:h-[400px] -top-16 -left-16 sm:-top-32 sm:-left-32" aria-hidden="true" />
+              <div className="orb orb-cyan w-[150px] h-[150px] sm:w-[300px] sm:h-[300px] top-20 -right-10 sm:right-0" aria-hidden="true" />
+              <div className="orb orb-blue w-[120px] h-[120px] sm:w-[250px] sm:h-[250px] bottom-0 left-1/4 sm:left-1/3" aria-hidden="true" />
 
               <div className="relative grid-pattern py-16 sm:py-24">
                 <div className="text-center mb-16">
                   <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-cyan-500/20 bg-cyan-500/5 mb-8">
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" aria-hidden="true" />
                     <span className="text-xs text-cyan-400">Built on Arcium MXE &mdash; Confidential Computing for Solana</span>
                   </div>
 
@@ -560,7 +560,7 @@ export default function Home() {
 
                 <div className="grid sm:grid-cols-3 gap-4 max-w-4xl mx-auto">
                   <div className="glass-card-elevated p-6 text-center group hover:border-cyan-500/20 transition-all duration-500">
-                    <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto mb-4 group-hover:glow-cyan transition-all">
+                    <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto mb-4 group-hover:glow-cyan transition-all" aria-hidden="true">
                       <LockIcon className="w-6 h-6 text-cyan-400" />
                     </div>
                     <h3 className="font-display font-semibold text-white mb-2">Encrypted Votes</h3>

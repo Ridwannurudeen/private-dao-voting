@@ -4,7 +4,7 @@ import { parseAnchorError, explorerTxUrl } from "../errors";
 describe("parseAnchorError", () => {
     it("maps known error names to friendly messages", () => {
         expect(parseAnchorError({ message: "QuorumNotReached" })).toBe(
-            "Not enough votes to reveal results. The quorum threshold has not been met."
+            "Not enough votes have been cast to reach quorum."
         );
         expect(parseAnchorError({ message: "VotingEnded" })).toBe(
             "Voting has ended for this proposal."
@@ -32,6 +32,21 @@ describe("parseAnchorError", () => {
         );
     });
 
+    it("maps new Anchor program error names to friendly messages", () => {
+        expect(parseAnchorError({ message: "VotingNotEnded" })).toBe(
+            "Voting is still in progress. You can reveal results after the voting period ends."
+        );
+        expect(parseAnchorError({ message: "AlreadyVoted" })).toBe(
+            "You've already cast your vote on this proposal."
+        );
+        expect(parseAnchorError({ message: "InsufficientTokenBalance" })).toBe(
+            "You need more governance tokens to vote."
+        );
+        expect(parseAnchorError({ message: "InvalidDelegationAccount" })).toBe(
+            "There's an issue with your delegation status. Please check your delegation settings."
+        );
+    });
+
     it("handles string errors with known names", () => {
         expect(parseAnchorError("VotingEnded")).toBe(
             "Voting has ended for this proposal."
@@ -46,10 +61,10 @@ describe("parseAnchorError", () => {
 
     it("handles common Solana errors", () => {
         expect(parseAnchorError({ message: "custom program error: 0x1" })).toBe(
-            "Insufficient SOL balance for transaction fees."
+            "You don't have enough SOL to pay for this transaction."
         );
         expect(parseAnchorError({ message: "already in use" })).toBe(
-            "This action has already been completed."
+            "You've already voted on this proposal."
         );
         expect(parseAnchorError({ message: "blockhash not found" })).toBe(
             "Transaction expired. Please try again."
@@ -59,16 +74,67 @@ describe("parseAnchorError", () => {
         );
     });
 
+    it("maps Account not found to friendly message", () => {
+        expect(parseAnchorError({ message: "Account not found" })).toBe(
+            "This proposal hasn't been created yet. Please try refreshing."
+        );
+    });
+
+    it("maps Insufficient funds to friendly message", () => {
+        expect(parseAnchorError({ message: "Insufficient funds for transaction" })).toBe(
+            "You don't have enough SOL to pay for this transaction."
+        );
+    });
+
+    it("maps token account errors to friendly message", () => {
+        expect(parseAnchorError({ message: "Token account not found" })).toBe(
+            "You need governance tokens to vote. Use the faucet to get test tokens."
+        );
+        expect(parseAnchorError({ message: "could not find account" })).toBe(
+            "You need governance tokens to vote. Use the faucet to get test tokens."
+        );
+    });
+
+    it("maps already been processed to friendly message", () => {
+        expect(parseAnchorError({ message: "This transaction has already been processed" })).toBe(
+            "You've already voted on this proposal."
+        );
+    });
+
+    it("maps Signature verification failed to friendly message", () => {
+        expect(parseAnchorError({ message: "Signature verification failed" })).toBe(
+            "Transaction signing was cancelled or failed. Please try again."
+        );
+    });
+
+    it("maps Blockhash not found (capital B) to friendly message", () => {
+        expect(parseAnchorError({ message: "Blockhash not found" })).toBe(
+            "Transaction expired. Please try again."
+        );
+    });
+
+    it("maps block height exceeded to friendly message", () => {
+        expect(parseAnchorError({ message: "block height exceeded" })).toBe(
+            "Transaction expired. Please try again."
+        );
+    });
+
+    it("maps User denied to friendly message", () => {
+        expect(parseAnchorError({ message: "User denied transaction signature" })).toBe(
+            "Transaction was cancelled."
+        );
+    });
+
     it("does not false-positive on 0x10, 0x1a, 0x100, etc.", () => {
         // These should NOT match the 0x1 SOL-fee error
         expect(parseAnchorError({ message: "custom program error: 0x10" })).not.toBe(
-            "Insufficient SOL balance for transaction fees."
+            "You don't have enough SOL to pay for this transaction."
         );
         expect(parseAnchorError({ message: "custom program error: 0x1a" })).not.toBe(
-            "Insufficient SOL balance for transaction fees."
+            "You don't have enough SOL to pay for this transaction."
         );
         expect(parseAnchorError({ message: "custom program error: 0x100" })).not.toBe(
-            "Insufficient SOL balance for transaction fees."
+            "You don't have enough SOL to pay for this transaction."
         );
     });
 

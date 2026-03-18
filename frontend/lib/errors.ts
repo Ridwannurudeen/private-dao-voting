@@ -1,11 +1,15 @@
 const ERROR_MAP: Record<string, string> = {
-  QuorumNotReached: "Not enough votes to reveal results. The quorum threshold has not been met.",
+  QuorumNotReached: "Not enough votes have been cast to reach quorum.",
   ActiveDelegation: "You have an active delegation. Revoke it before voting directly.",
   VotingEnded: "Voting has ended for this proposal.",
+  VotingNotEnded: "Voting is still in progress. You can reveal results after the voting period ends.",
   VotingStillActive: "Voting is still active. Wait for the deadline before revealing.",
   NotAuthority: "Only the proposal authority can perform this action.",
   AlreadyRevealed: "Results have already been revealed for this proposal.",
+  AlreadyVoted: "You've already cast your vote on this proposal.",
   InsufficientBalance: "You don't have enough gate tokens to vote on this proposal.",
+  InsufficientTokenBalance: "You need more governance tokens to vote.",
+  InvalidDelegationAccount: "There's an issue with your delegation status. Please check your delegation settings.",
   ArithmeticOverflow: "Vote tally arithmetic overflow. Please contact the DAO administrator.",
   VoteTallyMismatch: "Vote tally mismatch detected. The sum of votes doesn't match the total.",
 };
@@ -46,12 +50,20 @@ export function parseAnchorError(error: any): string {
   }
 
   // Check for common Solana errors
-  if (/custom program error: 0x1\b/.test(msg)) return "Insufficient SOL balance for transaction fees.";
+  if (/custom program error: 0x1\b/.test(msg)) return "You don't have enough SOL to pay for this transaction.";
+  if (msg.includes("Account not found"))
+    return "This proposal hasn't been created yet. Please try refreshing.";
+  if (msg.includes("Insufficient funds"))
+    return "You don't have enough SOL to pay for this transaction.";
+  if (msg.includes("Token account not found") || msg.includes("could not find account"))
+    return "You need governance tokens to vote. Use the faucet to get test tokens.";
   if (msg.includes("already in use") || msg.includes("already been processed"))
-    return "This action has already been completed.";
-  if (msg.includes("blockhash not found"))
+    return "You've already voted on this proposal.";
+  if (msg.includes("Signature verification failed"))
+    return "Transaction signing was cancelled or failed. Please try again.";
+  if (msg.includes("blockhash not found") || msg.includes("Blockhash not found") || msg.includes("block height exceeded"))
     return "Transaction expired. Please try again.";
-  if (msg.includes("User rejected"))
+  if (msg.includes("User rejected") || msg.includes("User denied"))
     return "Transaction was cancelled.";
 
   // Truncate long error messages
