@@ -226,6 +226,58 @@ export class ArciumClient {
     }
   }
 
+  // ==================== RETRY ====================
+
+  /**
+   * Re-attempt MXE connection when fallback mode is active.
+   * Call this after the MXE cluster comes online to upgrade from
+   * local encryption fallback to real MXE-backed encryption.
+   * Returns true if MXE is now connected (no longer in fallback mode).
+   */
+  async retryMXEConnection(): Promise<boolean> {
+    if (!this.fallbackMode || !this.mxeProgramId) {
+      // Not in fallback mode or no MXE program ID — nothing to retry
+      return !this.fallbackMode && this.initialized;
+    }
+
+    this.emitStatus({
+      status: "PROCESSING",
+      message: "Retrying MXE connection...",
+    });
+
+    try {
+      const mxeKeyPromise = getMXEPublicKey(this.provider, this.mxeProgramId);
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("MXE key fetch timed out")), 10000)
+      );
+      const result = await Promise.race([mxeKeyPromise, timeout]);
+      if (!result) {
+        throw new Error("getMXEPublicKey returned null — keys not finalized on cluster");
+      }
+
+      // MXE is now live — upgrade from fallback to real MXE encryption
+      this.mxePublicKey = result;
+      this.fallbackMode = false;
+
+      const sharedSecret = x25519.getSharedSecret(this.privateKey, this.mxePublicKey);
+      this.cipher = new RescueCipher(sharedSecret);
+
+      this.emitStatus({
+        status: "IDLE",
+        message: "Connected to Arcium MXE",
+      });
+
+      return true;
+    } catch (err: any) {
+      console.warn("MXE retry failed:", err?.message);
+      this.emitStatus({
+        status: "IDLE",
+        message: `MXE still unavailable: ${err?.message}. Using local encryption fallback.`,
+      });
+      return false;
+    }
+  }
+
   // ==================== ENCRYPT ====================
 
   async encryptVote(

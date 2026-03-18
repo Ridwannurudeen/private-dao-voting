@@ -15,6 +15,7 @@ import {
   devInitTally,
   devCastVote,
   castVoteWithArcium,
+  revealResultsWithArcium,
   ensureTallyInitialized,
   devRevealResults,
 } from "../lib/contract";
@@ -419,7 +420,7 @@ export default function Home() {
         );
       } else {
         const computationOffset = deriveComputationOffset(proposal.publicKey, Date.now());
-        const arciumAccounts = client.getArciumAccounts("vote", computationOffset);
+        const arciumAccounts = client.getArciumAccounts("cast_vote", computationOffset);
         txSig = await castVoteWithArcium(
           program, publicKey, proposal.publicKey, proposal.gateMint,
           secretInput.encryptedChoice, secretInput.nonce, secretInput.voterPubkey,
@@ -473,9 +474,27 @@ export default function Home() {
     setRevealing((r) => ({ ...r, [key]: true }));
 
     try {
-      const tally = devTallies[key] || { yes: 0, no: 0, abstain: 0 };
-      const txSig = await devRevealResults(program, publicKey, proposal.publicKey, tally.yes, tally.no, tally.abstain);
-      setToast({ message: "Results revealed!", type: "success", txUrl: explorerTxUrl(txSig) });
+      let client = arciumClient;
+      const useDevMode = DEVELOPMENT_MODE || !client || client.isFallback();
+
+      if (useDevMode) {
+        // Dev/fallback mode: use local tallies
+        const tally = devTallies[key] || { yes: 0, no: 0, abstain: 0 };
+        const txSig = await devRevealResults(program, publicKey, proposal.publicKey, tally.yes, tally.no, tally.abstain);
+        setToast({ message: "Results revealed!", type: "success", txUrl: explorerTxUrl(txSig) });
+      } else {
+        // Production MXE mode: queue finalize_and_reveal computation
+        const computationOffset = deriveComputationOffset(proposal.publicKey, Date.now());
+        const arciumAccounts = client!.getArciumAccounts("finalize_and_reveal", computationOffset);
+        const txSig = await revealResultsWithArcium(
+          program, publicKey, proposal.publicKey, arciumAccounts
+        );
+        setToast({
+          message: "Reveal computation queued. MXE will deliver results via callback.",
+          type: "success",
+          txUrl: explorerTxUrl(txSig),
+        });
+      }
       load();
     } catch (e: any) {
       console.error("Reveal error:", e);

@@ -308,6 +308,51 @@ export async function castVoteWithArcium(
   );
 }
 
+// Production mode: Reveal results with full Arcium MXE accounts
+export async function revealResultsWithArcium(
+  program: Program,
+  authority: PublicKey,
+  proposalPDA: PublicKey,
+  arciumAccounts: {
+    arciumProgram: PublicKey;
+    mxeAccount: PublicKey;
+    clusterAccount: PublicKey;
+    mempoolAccount: PublicKey;
+    executingPool: PublicKey;
+    computationAccount: PublicKey;
+    compDefAccount: PublicKey;
+    poolAccount: PublicKey;
+    clockAccount: PublicKey;
+    signSeed: PublicKey;
+  }
+): Promise<string> {
+  const [tallyPDA] = findTallyPDA(proposalPDA);
+  const [computationOffsetPDA] = findComputationOffsetPDA();
+
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .revealResults()
+      .accounts({
+        authority,
+        proposal: proposalPDA,
+        tally: tallyPDA,
+        signSeed: arciumAccounts.signSeed,
+        arciumProgram: arciumAccounts.arciumProgram,
+        mxeAccount: arciumAccounts.mxeAccount,
+        clusterAccount: arciumAccounts.clusterAccount,
+        mempoolAccount: arciumAccounts.mempoolAccount,
+        executingPool: arciumAccounts.executingPool,
+        computationAccount: arciumAccounts.computationAccount,
+        compDefAccount: arciumAccounts.compDefAccount,
+        poolAccount: arciumAccounts.poolAccount,
+        clockAccount: arciumAccounts.clockAccount,
+        computationOffsetAccount: computationOffsetPDA,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc(TX_OPTS)
+  );
+}
+
 // Dev mode: Reveal results (authority only, after voting ends)
 export async function devRevealResults(
   program: Program,
