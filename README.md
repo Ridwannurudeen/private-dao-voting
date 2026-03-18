@@ -57,7 +57,13 @@
                                    (yes, no, abstain)
                                            |
                                            v
-                                11. Final result on Solana
+                                11. Enforce quorum & threshold
+                                    (min votes + min YES %)
+                                           |
+                                           v
+                                12. Final result on Solana
+                                    Outcome: Passed / Failed
+                                    / QuorumNotReached
                                     (individual votes stay
                                      secret forever)
 ```
@@ -157,6 +163,10 @@ Design decisions:
 - **MPC tallying via Arcium** — Cluster 456 Arx Nodes compute on encrypted data
 - **Token-gated access** — SPL token balance required to vote, with built-in faucet
 - **Double-vote prevention** — On-chain VoteRecord PDA per (proposal, voter) pair
+- **Configurable quorum** — Minimum total votes required for result validity
+- **Configurable threshold** — Minimum YES percentage (in basis points) for a proposal to pass
+- **ProposalOutcome tracking** — On-chain outcome enum: Passed, Failed, or QuorumNotReached
+- **Vote delegation** — Delegate and revoke voting power to another wallet, enforced on-chain
 - **Auto tally initialization** — Tally accounts are auto-created if missing when voting
 - **Time-locked voting** — Configurable voting period with real-time countdown
 - **4-step vote progress** — Encrypting → Submitting → Processing → Confirmed
@@ -274,6 +284,8 @@ flowchart TB
 
 ## Security Model
 
+> For a comprehensive threat analysis, attack surface review, and anti-collusion design rationale, see **[docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md)**.
+
 | Layer | Mechanism | What It Prevents |
 |-------|-----------|-----------------|
 | **Vote privacy** | x25519 ECDH + RescueCipher | Anyone reading vote content |
@@ -283,6 +295,9 @@ flowchart TB
 | **Token gating** | SPL token balance check before vote | Non-stakeholders influencing outcomes |
 | **Callback auth** | Sign PDA signer constraint on MXE callbacks | Unauthorized result injection |
 | **Time lock** | `voting_ends_at` timestamp enforcement | Votes after deadline |
+| **Quorum enforcement** | Minimum total votes checked at reveal | Low-turnout decisions lacking legitimacy |
+| **Threshold enforcement** | Minimum YES basis points checked at reveal | Marginal results passing without clear support |
+| **Delegation checks** | On-chain delegate/revoke with PDA validation | Unauthorized voting on behalf of others |
 | **Front-running** | Encrypted tally opaque until `finalize_and_reveal` | Strategic last-minute voting |
 
 ---
@@ -377,7 +392,7 @@ cargo test
 |-----------|-----------|---------|
 | Smart contract | Anchor (Solana) | 0.32.x |
 | MPC circuit | Arcis (Arcium) | 0.1.0 |
-| Arcium client | @arcium-hq/client | 0.7.0 |
+| Arcium client | @arcium-hq/client | 0.9.2 |
 | Frontend | Next.js + React | 14.2.x |
 | Styling | Tailwind CSS | 3.4.x |
 | Wallet | Solana Wallet Adapter | latest |
