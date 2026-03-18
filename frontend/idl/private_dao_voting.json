@@ -72,6 +72,10 @@
           }
         },
         {
+          "name": "delegation_account",
+          "docs": ["Delegation PDA for the voter"]
+        },
+        {
           "name": "sign_seed",
           "pda": {
             "seeds": [
@@ -489,6 +493,10 @@
           }
         },
         {
+          "name": "delegation_account",
+          "docs": ["Delegation PDA for the voter"]
+        },
+        {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
@@ -702,6 +710,21 @@
         {
           "name": "proposal",
           "writable": true
+        },
+        {
+          "name": "tally",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [116, 97, 108, 108, 121]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -1559,6 +1582,11 @@
       "code": 6019,
       "name": "AlreadyRevealed",
       "msg": "Results already revealed"
+    },
+    {
+      "code": 6020,
+      "name": "InvalidDelegationAccount",
+      "msg": "Invalid delegation account: does not match expected PDA"
     }
   ],
   "types": [
