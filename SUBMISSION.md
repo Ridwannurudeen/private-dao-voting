@@ -84,6 +84,9 @@ The frontend integrates with Arcium via:
 | Token gating | SPL token balance check before vote | Non-stakeholders influencing outcomes |
 | Callback auth | Sign PDA signer constraint on callbacks | Unauthorized result injection |
 | Time lock | `voting_ends_at` timestamp enforcement | Votes after deadline |
+| Quorum enforcement | Minimum total votes checked at reveal | Low-turnout decisions lacking legitimacy |
+| Threshold enforcement | Minimum YES basis points checked at reveal | Marginal results passing without clear support |
+| Delegation checks | On-chain delegate/revoke with PDA validation | Unauthorized voting on behalf of others |
 | MPC integrity | Dishonest majority Cerberus protocol | Malicious nodes learning votes or forging tallies |
 | Circuit integrity | `circuit_hash!` SHA-256 verification | Tampered MPC bytecode |
 
@@ -98,8 +101,13 @@ The frontend includes a built-in faucet (`/api/faucet`) for devnet testing:
 ## Technical Highlights
 
 - **Anchor program** deployed on Solana Devnet (`71tbXM3A2j5pKHfjtu1LYgY8jfQWuoZtHecDu6F6EPJH`)
+- **Arcium SDK 0.9.2** — Upgraded from 0.6.6/0.7.0 to latest (Rust `arcium-client` + TS `@arcium-hq/client`), with LUT accounts, updated CPI signatures, and build-time circuit hash verification
+- **Quorum & threshold enforcement** — Configurable quorum (minimum total votes) and threshold (minimum YES percentage in basis points) checked on-chain at reveal; outcome stored as Passed/Failed/QuorumNotReached
+- **Vote delegation** — On-chain delegate/revoke system with PDA-based authorization; delegation checks enforced in the vote instruction
+- **Security model documentation** — Comprehensive threat matrix, attack surface analysis, and anti-collusion design rationale in `docs/SECURITY_MODEL.md`
+- **Frontend unit tests** — Vitest-based test suite covering PDA derivation, error parsing, and component logic
 - **Dev mode** — Full end-to-end testing without a live MXE cluster (same encryption pipeline, bypasses CPI)
-- **CI pipeline** — GitHub Actions: build, E2E, rustfmt, security audit
+- **CI pipeline** — GitHub Actions: build, E2E, rustfmt, security audit, frontend unit tests
 - **Dashboard UI** — Three-panel layout with sidebar (MXE heartbeat, Arx Nodes, mempool capacity), main governance area, and right panel (live network visualization, activity feed)
 - **Proposal sorting** — Active proposals first, then newest to oldest by creation time
 - **Graceful error handling** — Undecodable legacy accounts are skipped, user-friendly Anchor error messages
