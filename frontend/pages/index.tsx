@@ -201,6 +201,15 @@ export default function Home() {
       });
 
       const mapped: Proposal[] = [];
+      // Safe BN-to-number: clamp to MAX_SAFE_INTEGER to avoid garbage from old struct layouts
+      const safeNum = (v: any): number => {
+        if (!v) return 0;
+        if (BN.isBN(v)) {
+          try { const n = v.toNumber(); return n >= 0 && n <= 1e12 ? n : 0; } catch { return 0; }
+        }
+        const n = Number(v);
+        return Number.isFinite(n) && n >= 0 && n <= 1e12 ? n : 0;
+      };
       for (const raw of rawAccounts) {
         try {
           const a = program.coder.accounts.decode("proposal", raw.account.data);
@@ -210,15 +219,15 @@ export default function Home() {
             authority: a.authority,
             title: a.title,
             description: a.description,
-            votingEndsAt: Number(a.votingEndsAt ?? a.voting_ends_at ?? 0),
+            votingEndsAt: safeNum(a.votingEndsAt ?? a.voting_ends_at),
             isActive: a.isActive ?? a.is_active,
             isRevealed: a.isRevealed ?? a.is_revealed,
-            totalVotes: Number(a.totalVotes ?? a.total_votes ?? 0),
+            totalVotes: safeNum(a.totalVotes ?? a.total_votes),
             gateMint: a.gateMint ?? a.gate_mint,
-            minBalance: Number(a.minBalance ?? a.min_balance ?? 0),
-            yesVotes: Number(a.yesVotes ?? a.yes_votes ?? 0),
-            noVotes: Number(a.noVotes ?? a.no_votes ?? 0),
-            abstainVotes: Number(a.abstainVotes ?? a.abstain_votes ?? 0),
+            minBalance: safeNum(a.minBalance ?? a.min_balance),
+            yesVotes: safeNum(a.yesVotes ?? a.yes_votes),
+            noVotes: safeNum(a.noVotes ?? a.no_votes),
+            abstainVotes: safeNum(a.abstainVotes ?? a.abstain_votes),
           });
         } catch {
           console.warn("Skipping undeserializable proposal account:", raw.pubkey.toBase58());
