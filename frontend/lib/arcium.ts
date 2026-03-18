@@ -183,8 +183,7 @@ export class ArciumClient {
         if (
           typeof window !== "undefined" &&
           window.location.hostname !== "localhost" &&
-          window.location.hostname !== "127.0.0.1" &&
-          !window.location.hostname.includes("vercel.app")
+          window.location.hostname !== "127.0.0.1"
         ) {
           throw new Error(
             "Development mode detected in production environment. " +
@@ -353,13 +352,15 @@ export class ArciumClient {
     });
 
     try {
-      console.log("🔐 Arcium MXE Payload:", {
-        clusterOffset: this.clusterOffset.toString(),
-        ciphertext_preview:
-          Array.from(encryptedVote.ciphertext.slice(0, 8)).join(",") + "...",
-        nonce_preview:
-          Array.from(encryptedVote.nonce.slice(0, 4)).join(",") + "...",
-      });
+      if (process.env.NODE_ENV === "development") {
+        console.log("Arcium MXE Payload:", {
+          clusterOffset: this.clusterOffset.toString(),
+          ciphertext_preview:
+            Array.from(encryptedVote.ciphertext.slice(0, 8)).join(",") + "...",
+          nonce_preview:
+            Array.from(encryptedVote.nonce.slice(0, 4)).join(",") + "...",
+        });
+      }
 
       const computationId = `mxe_${proposalId.slice(0, 8)}_${Date.now()}`;
 
