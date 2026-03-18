@@ -172,11 +172,12 @@ fn check_no_active_delegation(
     remaining_accounts: &[AccountInfo],
     program_id: &Pubkey,
 ) -> Result<()> {
-    let (delegation_pda, _) = Pubkey::find_program_address(
-        &[DELEGATION_SEED, voter.as_ref()],
-        program_id,
-    );
-    if let Some(acct) = remaining_accounts.iter().find(|a| a.key() == delegation_pda) {
+    let (delegation_pda, _) =
+        Pubkey::find_program_address(&[DELEGATION_SEED, voter.as_ref()], program_id);
+    if let Some(acct) = remaining_accounts
+        .iter()
+        .find(|a| a.key() == delegation_pda)
+    {
         if acct.data_len() > 0 && acct.owner == program_id {
             return Err(VotingError::ActiveDelegation.into());
         }
