@@ -8,6 +8,35 @@
   },
   "instructions": [
     {
+      "name": "cancel_proposal",
+      "docs": [
+        "Cancel a proposal (authority only).",
+        "Can only cancel before voting ends OR if no votes have been cast."
+      ],
+      "discriminator": [
+        106,
+        74,
+        128,
+        146,
+        19,
+        65,
+        39,
+        23
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "cast_vote",
       "docs": [
         "Cast an encrypted vote"
@@ -34,7 +63,25 @@
         },
         {
           "name": "tally",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  108,
+                  108,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
         },
         {
           "name": "voter_token_account"
@@ -73,7 +120,10 @@
         },
         {
           "name": "delegation_account",
-          "docs": ["Delegation PDA for the voter"]
+          "docs": [
+            "If this account has data and is owned by the program, the voter has",
+            "an active delegation and cannot vote directly."
+          ]
         },
         {
           "name": "sign_seed",
@@ -455,7 +505,25 @@
         },
         {
           "name": "tally",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  108,
+                  108,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
         },
         {
           "name": "voter_token_account"
@@ -494,7 +562,10 @@
         },
         {
           "name": "delegation_account",
-          "docs": ["Delegation PDA for the voter"]
+          "docs": [
+            "If this account has data and is owned by the program, the voter has",
+            "an active delegation and cannot vote directly."
+          ]
         },
         {
           "name": "token_program",
@@ -689,7 +760,9 @@
     {
       "name": "dev_reveal_results",
       "docs": [
-        "Dev mode: Reveal results with provided counts (simulates MXE callback)"
+        "Dev mode: Reveal results with provided counts (simulates MXE callback)",
+        "After the voting deadline, anyone can trigger reveal (permissionless).",
+        "Before the deadline, only the proposal authority can reveal."
       ],
       "discriminator": [
         169,
@@ -717,7 +790,13 @@
             "seeds": [
               {
                 "kind": "const",
-                "value": [116, 97, 108, 108, 121]
+                "value": [
+                  116,
+                  97,
+                  108,
+                  108,
+                  121
+                ]
               },
               {
                 "kind": "account",
@@ -1064,7 +1143,25 @@
           "writable": true
         },
         {
-          "name": "tally"
+          "name": "tally",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  108,
+                  108,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
         },
         {
           "name": "sign_seed",
@@ -1280,7 +1377,25 @@
         },
         {
           "name": "tally",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  108,
+                  108,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
         },
         {
           "name": "sign_seed",
@@ -1427,6 +1542,19 @@
         116,
         220,
         8
+      ]
+    },
+    {
+      "name": "ProposalCancelled",
+      "discriminator": [
+        253,
+        59,
+        104,
+        46,
+        129,
+        78,
+        9,
+        14
       ]
     },
     {
@@ -1587,6 +1715,11 @@
       "code": 6020,
       "name": "InvalidDelegationAccount",
       "msg": "Invalid delegation account: does not match expected PDA"
+    },
+    {
+      "code": 6021,
+      "name": "CannotCancelAfterVotes",
+      "msg": "Cannot cancel proposal after votes have been cast and voting has ended"
     }
   ],
   "types": [
@@ -1847,6 +1980,22 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
           }
         ]
       }
