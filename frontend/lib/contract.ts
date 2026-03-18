@@ -79,6 +79,20 @@ export function findComputationOffsetPDA(): [PublicKey, number] {
   );
 }
 
+export function findProgramConfigPDA(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("program_config")],
+    PROGRAM_ID
+  );
+}
+
+export function findDaoConfigPDA(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("dao_config")],
+    PROGRAM_ID
+  );
+}
+
 // Get program instance from the generated IDL
 export function getProgram(provider: AnchorProvider, idl: Idl): Program {
   return new Program(idl, provider);
@@ -103,6 +117,8 @@ export async function devCreateProposal(
   const [proposalPDA] = findProposalPDA(proposalId);
   const votingEndsAt = new BN(Math.floor(Date.now() / 1000) + durationSeconds);
 
+  const [programConfigPDA] = findProgramConfigPDA();
+
   const tx = await rpcWithErrorFix(() =>
     program.methods
       .devCreateProposal(
@@ -121,6 +137,7 @@ export async function devCreateProposal(
       .accounts({
         authority,
         proposal: proposalPDA,
+        programConfig: programConfigPDA,
         systemProgram: SystemProgram.programId,
       })
       .rpc(TX_OPTS)
@@ -235,6 +252,7 @@ export async function devCastVote(
   const [tallyPDA] = findTallyPDA(proposalPDA);
   const [voteRecordPDA] = findVoteRecordPDA(proposalPDA, voter);
   const voterTokenAccount = getAssociatedTokenAddressSync(gateMint, voter);
+  const [programConfigPDA] = findProgramConfigPDA();
 
   return await rpcWithErrorFix(() =>
     program.methods
@@ -246,6 +264,7 @@ export async function devCastVote(
         voterTokenAccount,
         voteRecord: voteRecordPDA,
         delegationAccount: findDelegationPDA(voter)[0],
+        programConfig: programConfigPDA,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })
@@ -448,4 +467,257 @@ export async function hasUserVoted(
   } catch {
     return false;
   }
+}
+
+// ==================== PROGRAM CONFIG (MAINNET READINESS) ====================
+
+export interface ProgramConfigData {
+  authority: PublicKey;
+  isFrozen: boolean;
+  createdAt: number;
+}
+
+// Initialize ProgramConfig PDA (one-time setup)
+export async function initProgramConfig(
+  program: Program,
+  authority: PublicKey
+): Promise<string> {
+  const [programConfigPDA] = findProgramConfigPDA();
+
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .initProgramConfig()
+      .accounts({
+        authority,
+        programConfig: programConfigPDA,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc(TX_OPTS)
+  );
+}
+
+// Transfer program authority to a new address (e.g., Squads multisig)
+export async function transferAuthority(
+  program: Program,
+  authority: PublicKey,
+  newAuthority: PublicKey
+): Promise<string> {
+  const [programConfigPDA] = findProgramConfigPDA();
+
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .transferAuthority(newAuthority)
+      .accounts({
+        authority,
+        programConfig: programConfigPDA,
+      })
+      .rpc(TX_OPTS)
+  );
+}
+
+// Freeze the program (authority only)
+export async function freezeProgram(
+  program: Program,
+  authority: PublicKey
+): Promise<string> {
+  const [programConfigPDA] = findProgramConfigPDA();
+
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .freezeProgram()
+      .accounts({
+        authority,
+        programConfig: programConfigPDA,
+      })
+      .rpc(TX_OPTS)
+  );
+}
+
+// Unfreeze the program (authority only)
+export async function unfreezeProgram(
+  program: Program,
+  authority: PublicKey
+): Promise<string> {
+  const [programConfigPDA] = findProgramConfigPDA();
+
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .unfreezeProgram()
+      .accounts({
+        authority,
+        programConfig: programConfigPDA,
+      })
+      .rpc(TX_OPTS)
+  );
+}
+
+// Fetch ProgramConfig data (returns null if not initialized)
+export async function fetchProgramConfig(
+  program: Program
+): Promise<ProgramConfigData | null> {
+  const [programConfigPDA] = findProgramConfigPDA();
+  try {
+    const data: any = await withRetry(() =>
+      (program.account as any).programConfig.fetch(programConfigPDA)
+    );
+    return {
+      authority: data.authority,
+      isFrozen: data.isFrozen ?? data.is_frozen ?? false,
+      createdAt: data.createdAt?.toNumber?.() ?? data.created_at?.toNumber?.() ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ==================== DAO CONFIG (COMMUNITY GOVERNANCE) ====================
+
+export interface DaoConfigData {
+  authority: PublicKey;
+  depositMint: PublicKey;
+  proposalDeposit: number;
+  treasury: PublicKey;
+  slashIfNoQuorum: boolean;
+  governanceMint: PublicKey;
+  minProposerBalance: number;
+}
+
+// Initialize DaoConfig PDA (one-time setup by deployer/admin)
+export async function initDaoConfig(
+  program: Program,
+  authority: PublicKey,
+  depositMint: PublicKey,
+  proposalDeposit: BN,
+  treasury: PublicKey,
+  slashIfNoQuorum: boolean,
+  governanceMint: PublicKey,
+  minProposerBalance: BN
+): Promise<string> {
+  const [daoConfigPDA] = findDaoConfigPDA();
+
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .initDaoConfig(
+        depositMint,
+        proposalDeposit,
+        treasury,
+        slashIfNoQuorum,
+        governanceMint,
+        minProposerBalance
+      )
+      .accounts({
+        authority,
+        daoConfig: daoConfigPDA,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc(TX_OPTS)
+  );
+}
+
+// Update DaoConfig (admin only, all fields optional)
+export async function updateDaoConfig(
+  program: Program,
+  authority: PublicKey,
+  updates: {
+    depositMint?: PublicKey | null;
+    proposalDeposit?: BN | null;
+    treasury?: PublicKey | null;
+    slashIfNoQuorum?: boolean | null;
+    governanceMint?: PublicKey | null;
+    minProposerBalance?: BN | null;
+  }
+): Promise<string> {
+  const [daoConfigPDA] = findDaoConfigPDA();
+
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .updateDaoConfig(
+        updates.depositMint ?? null,
+        updates.proposalDeposit ?? null,
+        updates.treasury ?? null,
+        updates.slashIfNoQuorum ?? null,
+        updates.governanceMint ?? null,
+        updates.minProposerBalance ?? null
+      )
+      .accounts({
+        authority,
+        daoConfig: daoConfigPDA,
+      })
+      .rpc(TX_OPTS)
+  );
+}
+
+// Fetch DaoConfig data (returns null if not initialized)
+export async function fetchDaoConfig(
+  program: Program
+): Promise<DaoConfigData | null> {
+  const [daoConfigPDA] = findDaoConfigPDA();
+  try {
+    const data: any = await withRetry(() =>
+      (program.account as any).daoConfig.fetch(daoConfigPDA)
+    );
+    return {
+      authority: data.authority,
+      depositMint: data.depositMint ?? data.deposit_mint,
+      proposalDeposit: (data.proposalDeposit ?? data.proposal_deposit)?.toNumber?.() ?? 0,
+      treasury: data.treasury,
+      slashIfNoQuorum: data.slashIfNoQuorum ?? data.slash_if_no_quorum ?? false,
+      governanceMint: data.governanceMint ?? data.governance_mint,
+      minProposerBalance: (data.minProposerBalance ?? data.min_proposer_balance)?.toNumber?.() ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Community proposal creation: any wallet with sufficient governance tokens
+// can create a proposal. Requires DaoConfig to be initialized.
+export async function communityCreateProposal(
+  program: Program,
+  proposer: PublicKey,
+  title: string,
+  description: string,
+  durationSeconds: number,
+  gateMint: PublicKey,
+  minBalance: BN,
+  governanceMint: PublicKey,
+  quorum: BN = new BN(0),
+  thresholdBps: number = 5001,
+  privacyLevel: number = 0,
+  discussionUrl: string = "",
+  executionDelay: number = 0
+): Promise<{ tx: string; proposalId: BN; proposalPDA: PublicKey }> {
+  const proposalId = new BN(Date.now());
+  const [proposalPDA] = findProposalPDA(proposalId);
+  const [daoConfigPDA] = findDaoConfigPDA();
+  const votingEndsAt = new BN(Math.floor(Date.now() / 1000) + durationSeconds);
+  const proposerTokenAccount = getAssociatedTokenAddressSync(governanceMint, proposer);
+
+  const tx = await rpcWithErrorFix(() =>
+    program.methods
+      .communityCreateProposal(
+        proposalId,
+        title,
+        description,
+        votingEndsAt,
+        gateMint,
+        minBalance,
+        quorum,
+        thresholdBps,
+        privacyLevel,
+        discussionUrl,
+        new BN(executionDelay)
+      )
+      .accounts({
+        proposer,
+        proposal: proposalPDA,
+        daoConfig: daoConfigPDA,
+        proposerTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc(TX_OPTS)
+  );
+
+  return { tx, proposalId, proposalPDA };
 }

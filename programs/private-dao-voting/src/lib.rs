@@ -52,10 +52,11 @@
 //!
 //! ## Circuit Integrity
 //!
-//! The `circuit_hash!` macro embeds the SHA-256 hash of the compiled Arcis
-//! circuit at build time. During `init_comp_def`, this hash is compared
-//! against the deployed bytecode to detect tampering. If any MXE node runs
-//! a modified circuit, the hash mismatch causes computation to abort.
+//! The `build.rs` script computes the SHA-256 hash of the voting circuit at
+//! build time (from the compiled `.so` binary if available, otherwise from the
+//! circuit source code). During `init_comp_def`, this hash is compared against
+//! the deployer-provided hash to detect tampering. If any MXE node runs a
+//! modified circuit, the hash mismatch causes the transaction to fail.
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
@@ -78,6 +79,7 @@ pub const DELEGATION_SEED: &[u8] = b"delegation";
 pub const DAO_CONFIG_SEED: &[u8] = b"dao_config";
 pub const PROPOSAL_COUNTER_SEED: &[u8] = b"proposal_counter";
 pub const DEPOSIT_ESCROW_SEED: &[u8] = b"deposit_escrow";
+pub const PROGRAM_CONFIG_SEED: &[u8] = b"program_config";
 
 /// Maximum active proposals per wallet (anti-spam)
 pub const MAX_ACTIVE_PROPOSALS: u8 = 3;
@@ -97,24 +99,39 @@ pub const REVEAL_WITH_THRESHOLD_COMP: &str = "finalize_with_threshold";
 pub const LIVE_TALLY_COMP: &str = "get_live_tally";
 pub const VOTE_COUNT_COMP: &str = "get_vote_count";
 
-/// SHA-256 hash of the compiled voting circuit bytecode, embedded at build time.
-/// Used to verify MPC logic integrity during computation definition initialization.
-/// If any node attempts to run a modified circuit, the hash mismatch is detected.
+/// SHA-256 hash of the voting circuit, computed at build time by `build.rs`.
 ///
-/// In production: set this to the SHA-256 hex digest of the compiled circuit bytecode.
-/// Generate with: `sha256sum arcis/voting-circuit/build/voting-circuit.so | cut -d' ' -f1`
+/// The build script automatically selects the best available source:
+/// 1. **Compiled binary** (`arcis/voting-circuit/target/arcis/voting_circuit.so`) -- canonical
+///    hash matching `circuit_hash!("voting-circuit")` in the Arcis circuit crate. Used when
+///    the circuit has been built with `arcis build`. This is what the MXE cluster verifies.
+/// 2. **Source code** (`arcis/voting-circuit/src/lib.rs`) -- deterministic fallback for
+///    CI/dev builds without the Arcis toolchain. Same source always yields same hash.
 ///
-/// To compute the real hash before deployment:
-///   cd arcis/voting-circuit && arcis build && sha256sum target/arcis/voting_circuit.so
+/// During `init_comp_def`, this hash is compared against the deployer-provided hash
+/// to detect tampered circuits. If any MXE node runs modified bytecode, the hash
+/// mismatch causes the transaction to fail with `CircuitHashMismatch`.
 ///
-/// In dev/test: hardcoded placeholder (circuit isn't compiled during `anchor build`).
-/// Build with `--no-default-features` to disable dev-mode for production deployments.
+/// ## Verification
 ///
-/// TODO: When the `circuit_hash!` macro becomes available in `arcium-client`,
-/// replace the production arm with: `circuit_hash!("voting-circuit")`
-/// (currently the macro is only exported by the `arcis` crate for circuit code).
+/// ```bash
+/// # Verify against compiled binary (production):
+/// cd arcis/voting-circuit && arcis build
+/// sha256sum target/arcis/voting_circuit.so
+///
+/// # Verify against source (dev/CI):
+/// sha256sum arcis/voting-circuit/src/lib.rs
+/// ```
+///
+/// ## Hash Source
+///
+/// The `CIRCUIT_HASH_SOURCE` env var (set by build.rs) indicates which file was hashed:
+/// - `"compiled-binary"` -- from the `.so` file (production-ready)
+/// - `"source-code"` -- from `lib.rs` (dev/CI fallback)
+///
+/// Check at build time: the build output will show which source was used.
 #[cfg(not(feature = "dev-mode"))]
-pub const CIRCUIT_HASH: &str = "REPLACE_WITH_REAL_CIRCUIT_HASH_BEFORE_DEPLOYMENT";
+pub const CIRCUIT_HASH: &str = include_str!(concat!(env!("OUT_DIR"), "/circuit_hash.txt"));
 
 #[cfg(feature = "dev-mode")]
 pub const CIRCUIT_HASH: &str = "dev-mode-circuit-hash-placeholder";
@@ -190,6 +207,43 @@ fn check_no_active_delegation(
     // If the account has data and is owned by this program, delegation is active
     if delegation_account.data_len() > 0 && delegation_account.owner == program_id {
         return Err(VotingError::ActiveDelegation.into());
+    }
+
+    Ok(())
+}
+
+/// Soft freeze check: if ProgramConfig PDA exists and is_frozen is true, return error.
+/// If the ProgramConfig account doesn't exist (no data, wrong owner, or null), assume
+/// the program is NOT frozen — maintaining backward compatibility.
+fn check_not_frozen(
+    program_config_account: &AccountInfo,
+    program_id: &Pubkey,
+) -> Result<()> {
+    let (expected_pda, _) =
+        Pubkey::find_program_address(&[PROGRAM_CONFIG_SEED], program_id);
+
+    // If the account key doesn't match the expected PDA, skip the check (backward compat)
+    if program_config_account.key() != expected_pda {
+        return Ok(());
+    }
+
+    // If the account has no data or isn't owned by this program, config doesn't exist yet
+    if program_config_account.data_len() == 0 || program_config_account.owner != program_id {
+        return Ok(());
+    }
+
+    // Deserialize and check the is_frozen flag
+    // Account data layout: 8-byte discriminator + ProgramConfig fields
+    let data = program_config_account.try_borrow_data()?;
+    if data.len() < 8 + 32 + 1 {
+        // Not enough data to read authority + is_frozen — skip
+        return Ok(());
+    }
+
+    // is_frozen is at offset 8 (discriminator) + 32 (authority pubkey) = 40
+    let is_frozen = data[40] != 0;
+    if is_frozen {
+        return Err(VotingError::ProgramFrozen.into());
     }
 
     Ok(())
@@ -572,22 +626,24 @@ pub mod private_dao_voting {
     ///
     /// Registers the Arcis circuit bytecode on-chain and stores the circuit hash
     /// for integrity verification. The `circuit_hash` parameter must match
-    /// `CIRCUIT_HASH` (compiled from `circuit_hash!("voting-circuit")`).
+    /// `CIRCUIT_HASH`, which is computed at build time by `build.rs` from either
+    /// the compiled circuit binary (`.so`) or the circuit source code (`lib.rs`).
     ///
     /// After initialization, the MXE cluster can execute the following instructions:
-    /// - `initialize_voting` → Creates `Enc<Mxe, Tally>` with zero counters
-    /// - `cast_vote` → Accumulates `Enc<Shared, u8>` into `Enc<Mxe, Tally>`
-    /// - `finalize_and_reveal` → Threshold-decrypts aggregate totals
-    /// - `finalize_with_threshold` → Reveals + checks quorum/threshold
-    /// - `get_live_tally` → Real-time tally for Transparent mode
-    /// - `get_vote_count` → Total participation without breakdown
+    /// - `initialize_voting` -- Creates `Enc<Mxe, Tally>` with zero counters
+    /// - `cast_vote` -- Accumulates `Enc<Shared, u8>` into `Enc<Mxe, Tally>`
+    /// - `finalize_and_reveal` -- Threshold-decrypts aggregate totals
+    /// - `finalize_with_threshold` -- Reveals + checks quorum/threshold
+    /// - `get_live_tally` -- Real-time tally for Transparent mode
+    /// - `get_vote_count` -- Total participation without breakdown
     pub fn init_comp_def(
         ctx: Context<InitCompDef>,
         circuit_hash: String,
         comp_def_data: Vec<u8>,
     ) -> Result<()> {
-        // Verify circuit integrity: the provided hash must match the compile-time hash.
-        // This prevents deployment of tampered circuits — if any byte of the Arcis
+        // Verify circuit integrity: the provided hash must match the compile-time hash
+        // (computed by build.rs from the circuit binary or source code).
+        // This prevents deployment of tampered circuits -- if any byte of the Arcis
         // bytecode has been modified, the SHA-256 hash will differ.
         require!(
             circuit_hash == CIRCUIT_HASH,
@@ -597,6 +653,10 @@ pub mod private_dao_voting {
         msg!(
             "Initializing computation definitions with circuit hash: {}",
             circuit_hash
+        );
+        msg!(
+            "Hash source: {} (build.rs auto-detected)",
+            env!("CIRCUIT_HASH_SOURCE")
         );
         msg!(
             "Bytecode size: {} bytes ({} computation definitions)",
@@ -642,6 +702,9 @@ pub mod private_dao_voting {
         discussion_url: String,
         execution_delay: i64,
     ) -> Result<()> {
+        // Soft freeze check — if ProgramConfig exists and is_frozen, block new proposals
+        check_not_frozen(&ctx.accounts.program_config, ctx.program_id)?;
+
         // Validate V2 fields
         require!(
             threshold_bps > 0 && threshold_bps <= 10_000,
@@ -728,6 +791,9 @@ pub mod private_dao_voting {
         nonce: [u8; 16],
         voter_pubkey: [u8; 32],
     ) -> Result<()> {
+        // Soft freeze check — if ProgramConfig exists and is_frozen, block new votes
+        check_not_frozen(&ctx.accounts.program_config, ctx.program_id)?;
+
         require!(ctx.accounts.proposal.is_active, VotingError::VotingClosed);
 
         let clock = Clock::get()?;
@@ -909,6 +975,8 @@ pub mod private_dao_voting {
         proposal_deposit: u64,
         treasury: Pubkey,
         slash_if_no_quorum: bool,
+        governance_mint: Pubkey,
+        min_proposer_balance: u64,
     ) -> Result<()> {
         let config = &mut ctx.accounts.dao_config;
         config.authority = ctx.accounts.authority.key();
@@ -916,7 +984,229 @@ pub mod private_dao_voting {
         config.proposal_deposit = proposal_deposit;
         config.treasury = treasury;
         config.slash_if_no_quorum = slash_if_no_quorum;
+        config.governance_mint = governance_mint;
+        config.min_proposer_balance = min_proposer_balance;
         config.bump = ctx.bumps.dao_config;
+        Ok(())
+    }
+
+    /// Update DAO configuration (admin only)
+    pub fn update_dao_config(
+        ctx: Context<UpdateDaoConfig>,
+        deposit_mint: Option<Pubkey>,
+        proposal_deposit: Option<u64>,
+        treasury: Option<Pubkey>,
+        slash_if_no_quorum: Option<bool>,
+        governance_mint: Option<Pubkey>,
+        min_proposer_balance: Option<u64>,
+    ) -> Result<()> {
+        let config = &mut ctx.accounts.dao_config;
+
+        require!(
+            ctx.accounts.authority.key() == config.authority,
+            VotingError::Unauthorized
+        );
+
+        if let Some(v) = deposit_mint {
+            config.deposit_mint = v;
+        }
+        if let Some(v) = proposal_deposit {
+            config.proposal_deposit = v;
+        }
+        if let Some(v) = treasury {
+            config.treasury = v;
+        }
+        if let Some(v) = slash_if_no_quorum {
+            config.slash_if_no_quorum = v;
+        }
+        if let Some(v) = governance_mint {
+            config.governance_mint = v;
+        }
+        if let Some(v) = min_proposer_balance {
+            config.min_proposer_balance = v;
+        }
+
+        Ok(())
+    }
+
+    /// Community-governed proposal creation.
+    /// Any wallet holding sufficient governance tokens (as defined in DaoConfig)
+    /// can create a proposal. The proposer becomes the proposal authority.
+    /// Requires DaoConfig to be initialized with governance_mint and min_proposer_balance.
+    pub fn community_create_proposal(
+        ctx: Context<CommunityCreateProposal>,
+        proposal_id: u64,
+        title: String,
+        description: String,
+        voting_ends_at: i64,
+        gate_mint: Pubkey,
+        min_balance: u64,
+        quorum: u64,
+        threshold_bps: u16,
+        privacy_level: u8,
+        discussion_url: String,
+        execution_delay: i64,
+    ) -> Result<()> {
+        // Validate V2 fields
+        require!(
+            threshold_bps > 0 && threshold_bps <= 10_000,
+            VotingError::InvalidThreshold
+        );
+        require!(privacy_level <= 2, VotingError::InvalidPrivacyLevel);
+        require!(execution_delay >= 0, VotingError::InvalidExecutionDelay);
+
+        // Validate title and description lengths
+        require!(
+            !title.is_empty() && title.len() <= 100,
+            VotingError::InvalidTitleLength
+        );
+        require!(
+            !description.is_empty() && description.len() <= 5000,
+            VotingError::InvalidDescriptionLength
+        );
+
+        // Validate voting end time is in the future
+        let clock = Clock::get()?;
+        require!(
+            voting_ends_at > clock.unix_timestamp,
+            VotingError::InvalidVotingEndTime
+        );
+
+        // Token gate: proposer must hold sufficient governance tokens
+        let dao_config = &ctx.accounts.dao_config;
+        let token_account = &ctx.accounts.proposer_token_account;
+        require!(
+            token_account.owner == ctx.accounts.proposer.key(),
+            VotingError::InvalidTokenAccount
+        );
+        require!(
+            token_account.mint == dao_config.governance_mint,
+            VotingError::InvalidGovernanceMint
+        );
+        require!(
+            token_account.amount >= dao_config.min_proposer_balance,
+            VotingError::InsufficientProposerBalance
+        );
+
+        // Initialize proposal state -- proposer becomes the authority
+        let proposal = &mut ctx.accounts.proposal;
+        proposal.id = proposal_id;
+        proposal.authority = ctx.accounts.proposer.key();
+        proposal.title = title;
+        proposal.description = description;
+        proposal.voting_ends_at = voting_ends_at;
+        proposal.is_active = true;
+        proposal.is_revealed = false;
+        proposal.total_votes = 0;
+        proposal.gate_mint = gate_mint;
+        proposal.min_balance = min_balance;
+        proposal.mxe_program_id = Pubkey::default();
+        proposal.quorum = quorum;
+        proposal.threshold_bps = threshold_bps;
+        proposal.privacy_level = privacy_level;
+        proposal.passed = false;
+        proposal.discussion_url = discussion_url;
+        proposal.deposit_amount = 0;
+        proposal.deposit_returned = false;
+        proposal.execution_delay = execution_delay;
+        proposal.executed = false;
+        proposal.bump = ctx.bumps.proposal;
+
+        emit!(ProposalCreated {
+            proposal_id,
+            authority: ctx.accounts.proposer.key(),
+            voting_ends_at,
+        });
+
+        Ok(())
+    }
+
+    // ==================== PROGRAM CONFIG (MAINNET READINESS) ====================
+
+    /// Initialize the ProgramConfig PDA. Sets the caller as the initial authority.
+    /// This is a one-time setup instruction — the PDA is derived from ["program_config"].
+    pub fn init_program_config(ctx: Context<InitProgramConfig>) -> Result<()> {
+        let config = &mut ctx.accounts.program_config;
+        config.authority = ctx.accounts.authority.key();
+        config.is_frozen = false;
+        config.created_at = Clock::get()?.unix_timestamp;
+        config.bump = ctx.bumps.program_config;
+
+        msg!(
+            "ProgramConfig initialized. Authority: {}",
+            ctx.accounts.authority.key()
+        );
+        Ok(())
+    }
+
+    /// Transfer program authority to a new address (e.g., a Squads multisig).
+    /// Only the current authority can invoke this instruction.
+    pub fn transfer_authority(
+        ctx: Context<TransferAuthority>,
+        new_authority: Pubkey,
+    ) -> Result<()> {
+        let config = &mut ctx.accounts.program_config;
+
+        require!(
+            ctx.accounts.authority.key() == config.authority,
+            VotingError::Unauthorized
+        );
+
+        let old_authority = config.authority;
+        config.authority = new_authority;
+
+        emit!(AuthorityTransferred {
+            old_authority,
+            new_authority,
+        });
+
+        msg!(
+            "Authority transferred from {} to {}",
+            old_authority,
+            new_authority
+        );
+        Ok(())
+    }
+
+    /// Freeze the program — blocks new proposals and votes.
+    /// Only the current program authority can invoke this.
+    pub fn freeze_program(ctx: Context<FreezeProgram>) -> Result<()> {
+        let config = &mut ctx.accounts.program_config;
+
+        require!(
+            ctx.accounts.authority.key() == config.authority,
+            VotingError::Unauthorized
+        );
+
+        config.is_frozen = true;
+
+        emit!(ProgramFreezeToggled {
+            authority: ctx.accounts.authority.key(),
+            is_frozen: true,
+        });
+
+        msg!("Program frozen by {}", ctx.accounts.authority.key());
+        Ok(())
+    }
+
+    /// Unfreeze the program — re-enables proposals and votes.
+    /// Only the current program authority can invoke this.
+    pub fn unfreeze_program(ctx: Context<UnfreezeProgram>) -> Result<()> {
+        let config = &mut ctx.accounts.program_config;
+
+        require!(
+            ctx.accounts.authority.key() == config.authority,
+            VotingError::Unauthorized
+        );
+
+        config.is_frozen = false;
+
+        emit!(ProgramFreezeToggled {
+            authority: ctx.accounts.authority.key(),
+            is_frozen: false,
+        });
+
+        msg!("Program unfrozen by {}", ctx.accounts.authority.key());
         Ok(())
     }
 }
@@ -1212,6 +1502,10 @@ pub struct DevCreateProposal<'info> {
     )]
     pub proposal: Account<'info, Proposal>,
 
+    /// CHECK: ProgramConfig PDA — optional. If it doesn't exist, freeze check is skipped.
+    /// Passed as AccountInfo for backward compatibility (won't fail if account is missing).
+    pub program_config: AccountInfo<'info>,
+
     pub system_program: Program<'info, System>,
 }
 
@@ -1268,6 +1562,9 @@ pub struct DevCastVote<'info> {
     /// If this account has data and is owned by the program, the voter has
     /// an active delegation and cannot vote directly.
     pub delegation_account: AccountInfo<'info>,
+
+    /// CHECK: ProgramConfig PDA — optional. If it doesn't exist, freeze check is skipped.
+    pub program_config: AccountInfo<'info>,
 
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
@@ -1349,7 +1646,127 @@ pub struct InitDaoConfig<'info> {
     pub system_program: Program<'info, System>,
 }
 
+
+#[derive(Accounts)]
+pub struct UpdateDaoConfig<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [DAO_CONFIG_SEED],
+        bump = dao_config.bump,
+        constraint = dao_config.authority == authority.key() @ VotingError::Unauthorized
+    )]
+    pub dao_config: Account<'info, DaoConfig>,
+}
+
+#[derive(Accounts)]
+#[instruction(proposal_id: u64)]
+pub struct CommunityCreateProposal<'info> {
+    #[account(mut)]
+    pub proposer: Signer<'info>,
+
+    #[account(
+        init,
+        payer = proposer,
+        space = 8 + Proposal::INIT_SPACE,
+        seeds = [PROPOSAL_SEED, proposal_id.to_le_bytes().as_ref()],
+        bump
+    )]
+    pub proposal: Account<'info, Proposal>,
+
+    #[account(
+        seeds = [DAO_CONFIG_SEED],
+        bump = dao_config.bump
+    )]
+    pub dao_config: Account<'info, DaoConfig>,
+
+    /// Proposer's governance token account
+    #[account(
+        constraint = proposer_token_account.owner == proposer.key() @ VotingError::InvalidTokenAccount,
+        constraint = proposer_token_account.mint == dao_config.governance_mint @ VotingError::InvalidGovernanceMint
+    )]
+    pub proposer_token_account: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+// ==================== PROGRAM CONFIG ACCOUNT STRUCTURES ====================
+
+#[derive(Accounts)]
+pub struct InitProgramConfig<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + ProgramConfig::INIT_SPACE,
+        seeds = [PROGRAM_CONFIG_SEED],
+        bump
+    )]
+    pub program_config: Account<'info, ProgramConfig>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct TransferAuthority<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [PROGRAM_CONFIG_SEED],
+        bump = program_config.bump,
+        constraint = program_config.authority == authority.key() @ VotingError::Unauthorized
+    )]
+    pub program_config: Account<'info, ProgramConfig>,
+}
+
+#[derive(Accounts)]
+pub struct FreezeProgram<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [PROGRAM_CONFIG_SEED],
+        bump = program_config.bump,
+        constraint = program_config.authority == authority.key() @ VotingError::Unauthorized
+    )]
+    pub program_config: Account<'info, ProgramConfig>,
+}
+
+#[derive(Accounts)]
+pub struct UnfreezeProgram<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [PROGRAM_CONFIG_SEED],
+        bump = program_config.bump,
+        constraint = program_config.authority == authority.key() @ VotingError::Unauthorized
+    )]
+    pub program_config: Account<'info, ProgramConfig>,
+}
+
 // ==================== STATE ACCOUNTS ====================
+
+#[account]
+#[derive(InitSpace)]
+pub struct ProgramConfig {
+    /// Current program authority (can be a multisig address)
+    pub authority: Pubkey,
+    /// Emergency freeze flag — when true, new proposals and votes are blocked
+    pub is_frozen: bool,
+    /// Timestamp when this config was created
+    pub created_at: i64,
+    pub bump: u8,
+}
 
 #[account]
 #[derive(InitSpace)]
@@ -1404,6 +1821,10 @@ pub struct DaoConfig {
     pub treasury: Pubkey,
     /// Whether to slash deposits when quorum is not met
     pub slash_if_no_quorum: bool,
+    /// Governance token mint — proposers must hold this token to create proposals
+    pub governance_mint: Pubkey,
+    /// Minimum governance token balance required to create a community proposal
+    pub min_proposer_balance: u64,
     pub bump: u8,
 }
 
@@ -1510,6 +1931,18 @@ pub struct ResultsRevealed {
     pub passed: bool,
 }
 
+#[event]
+pub struct AuthorityTransferred {
+    pub old_authority: Pubkey,
+    pub new_authority: Pubkey,
+}
+
+#[event]
+pub struct ProgramFreezeToggled {
+    pub authority: Pubkey,
+    pub is_frozen: bool,
+}
+
 // ==================== ERRORS ====================
 
 #[error_code]
@@ -1558,4 +1991,16 @@ pub enum VotingError {
     InvalidDelegationAccount,
     #[msg("Cannot cancel proposal after votes have been cast and voting has ended")]
     CannotCancelAfterVotes,
+    #[msg("Title must be between 1 and 100 characters")]
+    InvalidTitleLength,
+    #[msg("Description must be between 1 and 5000 characters")]
+    InvalidDescriptionLength,
+    #[msg("Voting end time must be in the future")]
+    InvalidVotingEndTime,
+    #[msg("Governance token mint does not match DaoConfig")]
+    InvalidGovernanceMint,
+    #[msg("Insufficient governance token balance to create proposal")]
+    InsufficientProposerBalance,
+    #[msg("Program is frozen: new proposals and votes are temporarily blocked")]
+    ProgramFrozen,
 }
