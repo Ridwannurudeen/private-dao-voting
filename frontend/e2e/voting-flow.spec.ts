@@ -198,11 +198,7 @@ test("hero landing shows Arcium branding", async ({ page }) => {
     await expect(firstButton).toBeEnabled();
     // Click the wallet button — it should open a modal or dropdown
     await firstButton.click();
-    // After clicking, a wallet modal/dialog should appear
-    // The wallet adapter typically shows "Connect a wallet" or wallet options
-    const walletModal = page.locator(".wallet-adapter-modal-wrapper").or(
-      page.locator(".wallet-adapter-modal")
-    );
-    await expect(walletModal).toBeVisible({ timeout: 5000 });
+    // After clicking, the wallet modal dialog should appear
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 5000 });
   });
 });
