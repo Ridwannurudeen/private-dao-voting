@@ -4,7 +4,7 @@ import { BN } from "@coral-xyz/anchor";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
-import { LockIcon, UnlockIcon, ShieldCheckIcon } from "./Icons";
+import { LockIcon, ShieldCheckIcon } from "./Icons";
 import { ExportResults } from "./ExportResults";
 import { EncryptionAnimation } from "./EncryptionAnimation";
 import { VoteProgress, VoteStep } from "./VoteProgress";
@@ -138,13 +138,6 @@ export function ProposalCard({
           <span className={`px-3 py-1 rounded-full text-xs font-medium ${active ? "bg-green-500/20 text-green-400" : p.isRevealed ? "bg-blue-500/20 text-blue-400" : "bg-gray-500/20 text-gray-400"}`}>
             {active ? "Active" : p.isRevealed ? "Revealed" : "Ended"}
           </span>
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${p.isRevealed ? "bg-cyan-500/10 text-cyan-300 border border-cyan-500/20" : "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"}`}>
-            {p.isRevealed ? (
-              <><UnlockIcon className="w-3 h-3" /> Results Public</>
-            ) : (
-              <><LockIcon className="w-3 h-3" /> Encrypted Tally</>
-            )}
-          </span>
           {active && (
             <p className={`text-xs mt-0.5 font-mono ${isUrgent ? "text-red-400 animate-pulse" : "text-cyan-400"}`}>
               {formatTime(liveRemaining)} left
@@ -160,19 +153,10 @@ export function ProposalCard({
         </ReactMarkdown>
       </div>
 
-      {/* Badges */}
-      <div className="flex flex-wrap gap-2 mb-3">
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title="Cerberus MPC: secure even if N-1 of N nodes are malicious">
-          Cerberus Protected
-        </span>
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center gap-1" title="Votes processed in Shared Private State">
-          <LockIcon className="w-2.5 h-2.5" /> Shielded
-        </span>
+      <div className="flex items-center gap-3 text-xs text-gray-500 mb-4">
+        <span>{total} vote{total !== 1 ? 's' : ''}</span>
+        {Number(p.minBalance) > 0 && <span>Min {p.minBalance.toString()} tokens required</span>}
       </div>
-
-      <p className="text-xs text-gray-400 mb-4 break-all sm:break-normal">
-        Gate: {p.gateMint.toString().slice(0, 8)}... | Min balance: {p.minBalance.toString()} | Votes: {total}
-      </p>
 
       {/* Token gate check: show claim when ATA missing (balance=-1) or below minimum */}
       {active && !hasVoted && (tokenBalance < 0 || tokenBalance < Number(p.minBalance)) && (
@@ -256,29 +240,14 @@ export function ProposalCard({
         </div>
       )}
 
-      {/* Encrypted votes vault */}
+      {/* Encrypted votes summary */}
       {active && total > 0 && (
-        <div className="mt-4 pt-4 border-t border-white/10">
-          <div className={`bg-slate-800/50 rounded-xl p-4 border relative overflow-hidden ${isVoting ? "border-cyan-500/30" : "border-cyan-500/10"}`}>
-            <div className={`absolute inset-0 pointer-events-none ${isVoting ? "shimmer-bg-active" : "shimmer-bg"}`} />
-            <div className="relative flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldCheckIcon className={`w-5 h-5 text-cyan-400 ${isVoting ? "animate-pulse" : "animate-pulse-slow"}`} />
-                <span className={`text-gray-300 ${isVoting ? "data-mask-animation" : ""}`}>{total} vote{total !== 1 ? "s" : ""} sealed</span>
-              </div>
-              <LockIcon className="w-4 h-4 text-cyan-400/50" />
-            </div>
-            <div className="relative flex items-center justify-center gap-3 mt-2 flex-wrap">
-              <span className="text-[10px] text-cyan-400/60 flex items-center gap-1">
-                <LockIcon className="w-2.5 h-2.5" /> Encrypted Shared State
-              </span>
-              <span className="text-[10px] text-gray-600 hidden sm:inline">|</span>
-              <span className="text-[10px] text-purple-400/60 flex items-center gap-1">
-                <ShieldCheckIcon className="w-2.5 h-2.5" /> Correctness Proofs
-              </span>
-            </div>
-            <p className="relative text-xs text-gray-400 text-center mt-1">Secured by Arcium MXE</p>
+        <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <LockIcon className="w-4 h-4 text-cyan-400" />
+            <span className="text-sm text-gray-400">{total} encrypted vote{total !== 1 ? "s" : ""}</span>
           </div>
+          <span className="text-xs text-gray-500">Tallied via MPC</span>
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import { ShieldCheckIcon } from "./Icons";
-import { getMempoolCapacity, CLUSTER_OFFSET, DEVELOPMENT_MODE } from "../lib/arcium";
+import { DEVELOPMENT_MODE } from "../lib/arcium";
 
 interface SidebarProps {
   arciumClient: any;
@@ -32,13 +32,6 @@ const NAV_ITEMS = [
   },
 ];
 
-const CAPACITY_COLORS: Record<string, string> = {
-  Tiny: "text-gray-400 bg-gray-500/10 border-gray-500/20",
-  Small: "text-green-400 bg-green-500/10 border-green-500/20",
-  Medium: "text-yellow-400 bg-yellow-500/10 border-yellow-500/20",
-  Large: "text-red-400 bg-red-500/10 border-red-500/20",
-};
-
 export function Sidebar({
   arciumClient,
   connected,
@@ -46,9 +39,6 @@ export function Sidebar({
   onNavigate,
   onOpenDrawer,
 }: SidebarProps) {
-  const capacity = getMempoolCapacity();
-  const capacityColor = CAPACITY_COLORS[capacity] || CAPACITY_COLORS.Tiny;
-
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
@@ -130,28 +120,6 @@ export function Sidebar({
                   : DEVELOPMENT_MODE ? "Dev Mode" : "Offline"}
               </span>
             </div>
-          </div>
-
-          {/* Stats grid */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-white/[0.02] rounded-lg p-2">
-              <p className="text-[9px] text-gray-600 uppercase">Arx Nodes</p>
-              <p className="text-sm font-semibold text-white">5</p>
-            </div>
-            <div className="bg-white/[0.02] rounded-lg p-2">
-              <p className="text-[9px] text-gray-600 uppercase">MPC Epoch</p>
-              <p className="text-sm font-semibold text-white font-mono">
-                {CLUSTER_OFFSET.toString().slice(0, 6)}
-              </p>
-            </div>
-          </div>
-
-          {/* Mempool Capacity */}
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-gray-500">Mempool</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${capacityColor}`}>
-              {capacity}
-            </span>
           </div>
         </div>
 
