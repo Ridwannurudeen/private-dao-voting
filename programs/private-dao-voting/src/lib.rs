@@ -104,6 +104,9 @@ pub const VOTE_COUNT_COMP: &str = "get_vote_count";
 /// In production: set this to the SHA-256 hex digest of the compiled circuit bytecode.
 /// Generate with: `sha256sum arcis/voting-circuit/build/voting-circuit.so | cut -d' ' -f1`
 ///
+/// To compute the real hash before deployment:
+///   cd arcis/voting-circuit && arcis build && sha256sum target/arcis/voting_circuit.so
+///
 /// In dev/test: hardcoded placeholder (circuit isn't compiled during `anchor build`).
 /// Build with `--no-default-features` to disable dev-mode for production deployments.
 ///
