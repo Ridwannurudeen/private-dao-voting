@@ -6,6 +6,11 @@ export default function Document() {
       <Head>
         <meta name="description" content="Token-gated private voting on Solana powered by Arcium MXE. Votes are encrypted end-to-end via multi-party computation — individual choices are never revealed." />
 
+        {/* Google Fonts: Inter (body) + Space Grotesk (headings/display) */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+
         {/* Favicon — ICO fallback for all browsers, SVG for modern, PNG sizes for devices */}
         <link rel="icon" href="/favicon.ico" sizes="32x32" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -17,7 +22,7 @@ export default function Document() {
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0a0a1a" />
       </Head>
-      <body>
+      <body className="font-sans antialiased">
         <Main />
         <NextScript />
       </body>

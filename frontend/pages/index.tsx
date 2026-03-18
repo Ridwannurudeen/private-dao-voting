@@ -515,8 +515,6 @@ export default function Home() {
                   <h1 className="text-lg font-bold text-gradient truncate">Private DAO Voting</h1>
                   <div className="flex items-center gap-2">
                     <span className="text-[9px] text-gray-500 tracking-[0.2em] uppercase">Powered by Arcium</span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                    <span className="text-[9px] text-green-400/70">Devnet</span>
                   </div>
                 </div>
               </div>
@@ -540,7 +538,7 @@ export default function Home() {
                     <span className="text-xs text-cyan-400">Built on Arcium MXE &mdash; Confidential Computing for Solana</span>
                   </div>
 
-                  <h2 className="text-4xl sm:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
+                  <h2 className="text-4xl sm:text-6xl lg:text-7xl font-display font-bold mb-6 leading-tight">
                     <span className="text-white">Vote </span>
                     <span className="text-gradient-animated">Privately</span>
                     <br />
@@ -554,7 +552,7 @@ export default function Home() {
                   </p>
 
                   <p className="text-gray-500 text-sm mb-10 max-w-lg mx-auto">
-                    No vote buying. No social coercion. No front-running. Just anonymous, verifiable results.
+                    Governance without social pressure.
                   </p>
 
                   <WalletMultiButton />
@@ -565,8 +563,8 @@ export default function Home() {
                     <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto mb-4 group-hover:glow-cyan transition-all">
                       <LockIcon className="w-6 h-6 text-cyan-400" />
                     </div>
-                    <h3 className="font-semibold text-white mb-2">Encrypted Votes</h3>
-                    <p className="text-sm text-gray-400 leading-relaxed">x25519 ECDH + RescueCipher encryption before votes leave your browser</p>
+                    <h3 className="font-display font-semibold text-white mb-2">Encrypted Votes</h3>
+                    <p className="text-sm text-gray-400 leading-relaxed">Your vote is encrypted before it leaves your browser. No one &mdash; not even validators &mdash; can see how you voted.</p>
                   </div>
 
                   <div className="glass-card-elevated p-6 text-center group hover:border-purple-500/20 transition-all duration-500">
@@ -577,24 +575,19 @@ export default function Home() {
                         <path d="M8 14h5" />
                       </svg>
                     </div>
-                    <h3 className="font-semibold text-white mb-2">MPC Tallying</h3>
-                    <p className="text-sm text-gray-400 leading-relaxed">Arcium MXE nodes compute on encrypted data &mdash; no single party sees votes</p>
+                    <h3 className="font-display font-semibold text-white mb-2">MPC Tallying</h3>
+                    <p className="text-sm text-gray-400 leading-relaxed">Votes are tallied by a network of independent nodes, without ever being decrypted.</p>
                   </div>
 
                   <div className="glass-card-elevated p-6 text-center group hover:border-emerald-500/20 transition-all duration-500">
                     <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-4">
                       <ShieldCheckIcon className="w-6 h-6 text-emerald-400" />
                     </div>
-                    <h3 className="font-semibold text-white mb-2">Verified Results</h3>
-                    <p className="text-sm text-gray-400 leading-relaxed">Correctness proofs guarantee the tally matches all submitted votes</p>
+                    <h3 className="font-display font-semibold text-white mb-2">Verified Results</h3>
+                    <p className="text-sm text-gray-400 leading-relaxed">Cryptographic proofs ensure the final count is honest and tamper-proof.</p>
                   </div>
                 </div>
 
-                <div className="flex justify-center gap-6 mt-12 flex-wrap">
-                  {["Solana", "Anchor", "Arcium MXE", "x25519", "SPL Tokens"].map((t) => (
-                    <span key={t} className="text-xs text-gray-500 border border-white/5 px-3 py-1.5 rounded-full">{t}</span>
-                  ))}
-                </div>
               </div>
             </div>
           </main>
@@ -641,7 +634,7 @@ export default function Home() {
           {/* Dashboard Top Bar */}
           <div className="dashboard-topbar flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div className="flex items-center gap-4 min-w-0 pl-12 lg:pl-0">
-              <h2 className="text-xl sm:text-2xl font-bold text-gradient truncate">Private DAO Governance</h2>
+              <h2 className="text-xl sm:text-2xl font-display font-bold text-gradient truncate">Private DAO Governance</h2>
               <div className="hidden sm:flex items-center gap-2">
                 <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
                   arciumClient
@@ -658,21 +651,9 @@ export default function Home() {
                       : "MXE Active"
                     : DEVELOPMENT_MODE ? "Dev Mode" : "MXE Offline"}
                 </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                  Cerberus Protocol
-                </span>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setDevConsoleOpen(true)}
-                className="px-3 py-1.5 text-[10px] bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all hidden sm:inline-flex items-center gap-1.5"
-              >
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                </svg>
-                System Integrity
-              </button>
               <ThemeToggle />
               <WalletMultiButton />
             </div>
@@ -717,7 +698,7 @@ export default function Home() {
                 <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-6">
                   <LockIcon className="w-8 h-8 text-purple-400" />
                 </div>
-                <h3 className="text-xl font-semibold mb-2 text-white">Welcome to Private DAO Voting</h3>
+                <h3 className="text-xl font-display font-semibold mb-2 text-white">Welcome to Private DAO Voting</h3>
                 <p className="text-gray-400 mb-6 max-w-md mx-auto">No proposals yet. Create the first one to start encrypted governance — votes are sealed with Arcium MPC and only aggregate results are revealed.</p>
                 <button onClick={() => setModal(true)} className="btn-primary px-8 py-3 text-base">+ Create First Proposal</button>
 
