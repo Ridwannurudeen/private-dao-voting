@@ -185,7 +185,11 @@ export class ArciumClient {
           const timeout = new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error("MXE key fetch timed out")), 10000)
           );
-          this.mxePublicKey = await Promise.race([mxeKeyPromise, timeout]);
+          const result = await Promise.race([mxeKeyPromise, timeout]);
+          if (!result) {
+            throw new Error("getMXEPublicKey returned null — keys not finalized on cluster");
+          }
+          this.mxePublicKey = result;
         } catch (mxeErr: any) {
           // MXE state account not live yet — fall back to local encryption
           console.warn("MXE unavailable:", mxeErr?.message, "— using local encryption fallback");
