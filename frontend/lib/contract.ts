@@ -353,7 +353,24 @@ export async function revealResultsWithArcium(
   );
 }
 
-// Dev mode: Reveal results (authority only, after voting ends)
+// Cancel a proposal (authority only, before voting ends or if no votes cast)
+export async function cancelProposal(
+  program: Program,
+  authority: PublicKey,
+  proposalPDA: PublicKey
+): Promise<string> {
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .cancelProposal()
+      .accounts({
+        authority,
+        proposal: proposalPDA,
+      })
+      .rpc(TX_OPTS)
+  );
+}
+
+// Dev mode: Reveal results (permissionless after voting ends)
 export async function devRevealResults(
   program: Program,
   authority: PublicKey,
@@ -374,10 +391,48 @@ export async function devRevealResults(
   );
 }
 
-// Fetch all proposals (with retry)
+// Fetch proposals with pagination support.
+// Anchor's .all() loads every account — this wrapper adds sorting and slicing
+// so callers can request a specific page without processing the full set themselves.
+export async function fetchProposals(
+  program: Program,
+  opts?: {
+    page?: number;
+    perPage?: number;
+  }
+): Promise<{ proposals: any[]; total: number }> {
+  const page = opts?.page ?? 1;
+  const perPage = opts?.perPage ?? 10;
+
+  const all: any[] = await withRetry(() => (program.account as any).proposal.all());
+  const sorted = all
+    .map((p: any) => ({ publicKey: p.publicKey, ...p.account }))
+    .sort((a: any, b: any) => {
+      // Sort by creation time descending (newest first)
+      const aTime = a.createdAt?.toNumber?.() ?? a.created_at?.toNumber?.() ?? 0;
+      const bTime = b.createdAt?.toNumber?.() ?? b.created_at?.toNumber?.() ?? 0;
+      return bTime - aTime;
+    });
+
+  const total = sorted.length;
+  const start = (page - 1) * perPage;
+  const proposals = sorted.slice(start, start + perPage);
+
+  return { proposals, total };
+}
+
+// Fetch all proposals sorted by creation time (newest first).
+// For large sets, prefer fetchProposals() with pagination.
+/** @deprecated Use fetchProposals() with pagination instead */
 export async function fetchAllProposals(program: Program): Promise<any[]> {
   const all: any[] = await withRetry(() => (program.account as any).proposal.all());
-  return all.map((p: any) => ({ publicKey: p.publicKey, ...p.account }));
+  return all
+    .map((p: any) => ({ publicKey: p.publicKey, ...p.account }))
+    .sort((a: any, b: any) => {
+      const aTime = a.createdAt?.toNumber?.() ?? a.created_at?.toNumber?.() ?? 0;
+      const bTime = b.createdAt?.toNumber?.() ?? b.created_at?.toNumber?.() ?? 0;
+      return bTime - aTime;
+    });
 }
 
 // Check if user has voted on a proposal (with retry)

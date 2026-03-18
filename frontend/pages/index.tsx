@@ -18,6 +18,7 @@ import {
   revealResultsWithArcium,
   ensureTallyInitialized,
   devRevealResults,
+  cancelProposal,
 } from "../lib/contract";
 import {
   ArciumClient,
@@ -88,6 +89,7 @@ export default function Home() {
   const [isEncrypting, setIsEncrypting] = useState(false);
   const [tokenBalances, setTokenBalances] = useState<Record<string, number>>({});
   const [claiming, setClaiming] = useState<Record<string, boolean>>({});
+  const [cancelling, setCancelling] = useState<Record<string, boolean>>({});
   const [showConfetti, setShowConfetti] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [voteStep, setVoteStep] = useState<Record<string, VoteStep>>({});
@@ -465,7 +467,7 @@ export default function Home() {
     setVoting((v) => ({ ...v, [key]: false }));
   };
 
-  // Reveal results (authority only)
+  // Reveal results (permissionless after voting ends)
   const reveal = async (proposal: Proposal) => {
     const program = getProgram();
     if (!program || !publicKey) return;
@@ -501,6 +503,25 @@ export default function Home() {
       setToast({ message: parseAnchorError(e), type: "error" });
     }
     setRevealing((r) => ({ ...r, [key]: false }));
+  };
+
+  // Cancel proposal (authority only)
+  const cancel = async (proposal: Proposal) => {
+    const program = getProgram();
+    if (!program || !publicKey) return;
+
+    const key = proposal.publicKey.toString();
+    setCancelling((c) => ({ ...c, [key]: true }));
+
+    try {
+      const txSig = await cancelProposal(program, publicKey, proposal.publicKey);
+      setToast({ message: "Proposal cancelled.", type: "success", txUrl: explorerTxUrl(txSig) });
+      load();
+    } catch (e: any) {
+      console.error("Cancel error:", e);
+      setToast({ message: parseAnchorError(e), type: "error" });
+    }
+    setCancelling((c) => ({ ...c, [key]: false }));
   };
 
   const handleConfettiDone = useCallback(() => setShowConfetti(false), []);
@@ -753,11 +774,13 @@ export default function Home() {
                     isVoting={voting[key] || false}
                     isRevealing={revealing[key] || false}
                     isClaiming={claiming[key] || false}
+                    isCancelling={cancelling[key] || false}
                     isEncrypting={isEncrypting}
                     currentVoteStep={voteStep[key] || "idle"}
                     onSelectChoice={(choice) => setSelected((s) => ({ ...s, [key]: choice }))}
                     onVote={() => vote(p, selected[key]!)}
                     onReveal={() => reveal(p)}
+                    onCancel={() => cancel(p)}
                     onClaimTokens={() => claimTokens(p)}
                     onToggleHide={() => toggleHideProposal(key)}
                     onVoteStepComplete={() => setVoteStep((s) => ({ ...s, [key]: "idle" }))}
