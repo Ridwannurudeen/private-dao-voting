@@ -21,7 +21,7 @@ import {
   createArciumClient,
   MXE_PROGRAM_ID,
   DEVELOPMENT_MODE,
-  DEVNET_CLUSTER_OFFSET,
+  CLUSTER_OFFSET,
   ArciumStatusEvent,
   deriveComputationOffset,
 } from "../../lib/arcium";
@@ -75,7 +75,7 @@ export default function ProposalDetail() {
   useEffect(() => {
     if (!anchorWallet || !connected) { setArciumClient(null); return; }
     const provider = new AnchorProvider(connection, anchorWallet, { commitment: "confirmed" });
-    const client = createArciumClient(provider, DEVNET_CLUSTER_OFFSET);
+    const client = createArciumClient(provider, CLUSTER_OFFSET);
     const unsub = client.onStatusChange((event: ArciumStatusEvent) => {
       setIsEncrypting(event.status === "ENCRYPTING");
     });
@@ -155,7 +155,7 @@ export default function ProposalDetail() {
       let client = arciumClient;
       if (!client) {
         const provider = new AnchorProvider(connection, anchorWallet!, { commitment: "confirmed" });
-        client = createArciumClient(provider, DEVNET_CLUSTER_OFFSET);
+        client = createArciumClient(provider, CLUSTER_OFFSET);
         await client.initialize(MXE_PROGRAM_ID);
         setArciumClient(client);
       }

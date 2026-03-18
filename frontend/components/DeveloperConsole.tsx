@@ -4,7 +4,7 @@ import {
   ArciumStatusEvent,
   DEVELOPMENT_MODE,
   MXE_PROGRAM_ID,
-  DEVNET_CLUSTER_OFFSET,
+  CLUSTER_OFFSET,
   getMempoolCapacity,
   getCircuitHash,
   CIRCUIT_INSTRUCTIONS,
@@ -49,7 +49,7 @@ export function DeveloperConsole({ arciumClient, isOpen, onClose }: DeveloperCon
   if (!isOpen) return null;
 
   const clusterInfo = arciumClient?.getClusterInfo() ?? {
-    offset: DEVNET_CLUSTER_OFFSET.toString(),
+    offset: CLUSTER_OFFSET.toString(),
     programId: MXE_PROGRAM_ID,
     connected: false,
   };

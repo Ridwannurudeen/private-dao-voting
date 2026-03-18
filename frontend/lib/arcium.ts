@@ -62,7 +62,14 @@ export interface SecretInput {
 
 // ==================== CONFIG ====================
 
-export const DEVNET_CLUSTER_OFFSET = new BN(456);
+// Network configuration — configurable for devnet/mainnet
+export const CLUSTER_OFFSET = new BN(
+  parseInt(process.env.NEXT_PUBLIC_CLUSTER_OFFSET || "456")
+);
+export const NETWORK = process.env.NEXT_PUBLIC_NETWORK || "devnet";
+
+/** @deprecated Use CLUSTER_OFFSET instead */
+export const DEVNET_CLUSTER_OFFSET = CLUSTER_OFFSET;
 export const MXE_PROGRAM_ID: string | null = process.env.NEXT_PUBLIC_MXE_PROGRAM_ID?.trim() || null;
 export const DEVELOPMENT_MODE = MXE_PROGRAM_ID === null;
 
@@ -111,7 +118,7 @@ export class ArciumClient {
   constructor(provider: AnchorProvider, clusterOffset?: BN) {
     this.connection = provider.connection;
     this.provider = provider;
-    this.clusterOffset = clusterOffset ?? DEVNET_CLUSTER_OFFSET;
+    this.clusterOffset = clusterOffset ?? CLUSTER_OFFSET;
 
     this.privateKey = x25519.utils.randomPrivateKey();
     this.publicKey = x25519.getPublicKey(this.privateKey);

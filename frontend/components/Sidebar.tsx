@@ -1,5 +1,5 @@
 import { ShieldCheckIcon } from "./Icons";
-import { getMempoolCapacity, DEVNET_CLUSTER_OFFSET, DEVELOPMENT_MODE } from "../lib/arcium";
+import { getMempoolCapacity, CLUSTER_OFFSET, DEVELOPMENT_MODE } from "../lib/arcium";
 
 interface SidebarProps {
   arciumClient: any;
@@ -141,7 +141,7 @@ export function Sidebar({
             <div className="bg-white/[0.02] rounded-lg p-2">
               <p className="text-[9px] text-gray-600 uppercase">MPC Epoch</p>
               <p className="text-sm font-semibold text-white font-mono">
-                {DEVNET_CLUSTER_OFFSET.toString().slice(0, 6)}
+                {CLUSTER_OFFSET.toString().slice(0, 6)}
               </p>
             </div>
           </div>
