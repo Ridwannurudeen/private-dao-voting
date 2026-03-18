@@ -781,6 +781,8 @@ pub mod private_dao_voting {
     }
 
     /// Dev mode: Reveal results with provided counts (simulates MXE callback)
+    /// After the voting deadline, anyone can trigger reveal (permissionless).
+    /// Before the deadline, only the proposal authority can reveal.
     pub fn dev_reveal_results(
         ctx: Context<DevRevealResults>,
         yes_count: u64,
@@ -789,15 +791,20 @@ pub mod private_dao_voting {
     ) -> Result<()> {
         let proposal = &mut ctx.accounts.proposal;
 
-        require!(
-            ctx.accounts.authority.key() == proposal.authority,
-            VotingError::Unauthorized
-        );
+        // Allow permissionless reveal after voting ends
+        let clock = Clock::get()?;
+        if clock.unix_timestamp < proposal.voting_ends_at {
+            // Before deadline: only authority can reveal
+            require!(
+                ctx.accounts.authority.key() == proposal.authority,
+                VotingError::Unauthorized
+            );
+        }
+        // After deadline: anyone can trigger reveal
 
         // Prevent re-reveal
         require!(!proposal.is_revealed, VotingError::AlreadyRevealed);
 
-        let clock = Clock::get()?;
         require!(
             clock.unix_timestamp >= proposal.voting_ends_at,
             VotingError::VotingNotEnded
@@ -862,6 +869,34 @@ pub mod private_dao_voting {
             total_votes,
             winner,
             passed: proposal.passed,
+        });
+
+        Ok(())
+    }
+
+    /// Cancel a proposal (authority only).
+    /// Can only cancel before voting ends OR if no votes have been cast.
+    pub fn cancel_proposal(ctx: Context<CancelProposal>) -> Result<()> {
+        let proposal = &mut ctx.accounts.proposal;
+        let clock = Clock::get()?;
+
+        require!(
+            ctx.accounts.authority.key() == proposal.authority,
+            VotingError::Unauthorized
+        );
+        require!(proposal.is_active, VotingError::VotingClosed);
+
+        // Can only cancel if voting hasn't ended OR no votes have been cast
+        require!(
+            clock.unix_timestamp < proposal.voting_ends_at || proposal.total_votes == 0,
+            VotingError::CannotCancelAfterVotes
+        );
+
+        proposal.is_active = false;
+
+        emit!(ProposalCancelled {
+            proposal: proposal.key(),
+            authority: ctx.accounts.authority.key(),
         });
 
         Ok(())
@@ -1254,6 +1289,15 @@ pub struct DevRevealResults<'info> {
 }
 
 #[derive(Accounts)]
+pub struct CancelProposal<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(mut)]
+    pub proposal: Account<'info, Proposal>,
+}
+
+#[derive(Accounts)]
 pub struct DelegateVote<'info> {
     #[account(mut)]
     pub delegator: Signer<'info>,
@@ -1450,6 +1494,12 @@ pub struct DelegationRevoked {
 }
 
 #[event]
+pub struct ProposalCancelled {
+    pub proposal: Pubkey,
+    pub authority: Pubkey,
+}
+
+#[event]
 pub struct ResultsRevealed {
     pub proposal: Pubkey,
     pub yes_votes: u64,
@@ -1506,4 +1556,6 @@ pub enum VotingError {
     AlreadyRevealed,
     #[msg("Invalid delegation account: does not match expected PDA")]
     InvalidDelegationAccount,
+    #[msg("Cannot cancel proposal after votes have been cast and voting has ended")]
+    CannotCancelAfterVotes,
 }

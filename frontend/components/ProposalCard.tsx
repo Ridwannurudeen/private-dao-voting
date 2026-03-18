@@ -47,11 +47,13 @@ interface ProposalCardProps {
   isVoting: boolean;
   isRevealing: boolean;
   isClaiming: boolean;
+  isCancelling: boolean;
   isEncrypting: boolean;
   currentVoteStep: VoteStep;
   onSelectChoice: (choice: "yes" | "no" | "abstain") => void;
   onVote: () => void;
   onReveal: () => void;
+  onCancel: () => void;
   onClaimTokens: () => void;
   onToggleHide: () => void;
   onVoteStepComplete: () => void;
@@ -67,11 +69,13 @@ export function ProposalCard({
   isVoting,
   isRevealing,
   isClaiming,
+  isCancelling,
   isEncrypting,
   currentVoteStep,
   onSelectChoice,
   onVote,
   onReveal,
+  onCancel,
   onClaimTokens,
   onToggleHide,
   onVoteStepComplete,
@@ -90,7 +94,11 @@ export function ProposalCard({
   const active = p.isActive && liveRemaining > 0;
   const isAuthority = publicKey && p.authority.equals(publicKey);
   const isEnded = liveRemaining <= 0;
-  const canReveal = isAuthority && isEnded && !p.isRevealed && p.isActive;
+  // After deadline: anyone can trigger reveal (permissionless)
+  // Before deadline: only authority can reveal
+  const canReveal = isEnded && !p.isRevealed && p.isActive;
+  // Authority can cancel before voting ends, or anytime if no votes cast
+  const canCancel = isAuthority && p.isActive && (liveRemaining > 0 || p.totalVotes === 0);
   const isUrgent = active && liveRemaining < 300; // < 5 minutes
 
   const yes = typeof p.yesVotes === "number" ? p.yesVotes : 0;
@@ -135,8 +143,8 @@ export function ProposalCard({
           <p className="text-sm text-gray-400">by {p.authority.toString().slice(0, 4)}...{p.authority.toString().slice(-4)}</p>
         </div>
         <div className="flex flex-row sm:flex-col items-start sm:items-end gap-2 flex-wrap">
-          <span className={`px-3 py-1 rounded-full text-xs font-medium ${active ? "bg-green-500/20 text-green-400" : p.isRevealed ? "bg-blue-500/20 text-blue-400" : "bg-gray-500/20 text-gray-400"}`}>
-            {active ? "Active" : p.isRevealed ? "Revealed" : "Ended"}
+          <span className={`px-3 py-1 rounded-full text-xs font-medium ${active ? "bg-green-500/20 text-green-400" : p.isRevealed ? "bg-blue-500/20 text-blue-400" : !p.isActive && !isEnded ? "bg-red-500/20 text-red-400" : "bg-gray-500/20 text-gray-400"}`}>
+            {active ? "Active" : p.isRevealed ? "Revealed" : !p.isActive && !isEnded ? "Cancelled" : "Ended"}
           </span>
           {active && (
             <p className={`text-xs mt-0.5 font-mono ${isUrgent ? "text-red-400 animate-pulse" : "text-cyan-400"}`}>
@@ -214,11 +222,19 @@ export function ProposalCard({
         </div>
       )}
 
-      {/* Reveal button */}
+      {/* Reveal button — permissionless after voting ends */}
       {canReveal && (
         <button onClick={onReveal} disabled={isRevealing}
           className="w-full py-3 mt-4 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl font-semibold disabled:opacity-50 hover:shadow-lg hover:shadow-cyan-500/20 transition-all">
           {isRevealing ? "Revealing..." : "Reveal Results"}
+        </button>
+      )}
+
+      {/* Cancel button — authority only, before voting ends or if no votes */}
+      {canCancel && (
+        <button onClick={onCancel} disabled={isCancelling}
+          className="w-full py-3 mt-4 bg-gradient-to-r from-red-600 to-red-500 rounded-xl font-semibold disabled:opacity-50 hover:shadow-lg hover:shadow-red-500/20 transition-all text-white">
+          {isCancelling ? "Cancelling..." : "Cancel Proposal"}
         </button>
       )}
 
@@ -251,10 +267,10 @@ export function ProposalCard({
         </div>
       )}
 
-      {/* Ended but not revealed */}
+      {/* Ended but not revealed — should not normally appear since canReveal is permissionless */}
       {!active && !p.isRevealed && !canReveal && (
         <div className="mt-4 pt-4 border-t border-white/10 text-xs text-gray-400">
-          Voting ended. Pending reveal by the proposal authority.
+          Voting ended. Connect your wallet to reveal results.
         </div>
       )}
     </article>

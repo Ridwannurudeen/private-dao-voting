@@ -12,6 +12,7 @@ const ERROR_MAP: Record<string, string> = {
   InvalidDelegationAccount: "There's an issue with your delegation status. Please check your delegation settings.",
   ArithmeticOverflow: "Vote tally arithmetic overflow. Please contact the DAO administrator.",
   VoteTallyMismatch: "Vote tally mismatch detected. The sum of votes doesn't match the total.",
+  CannotCancelAfterVotes: "This proposal cannot be cancelled because votes have been cast and the voting period has ended.",
 };
 
 export function parseAnchorError(error: any): string {
