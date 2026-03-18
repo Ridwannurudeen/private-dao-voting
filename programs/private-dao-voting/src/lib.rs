@@ -164,6 +164,26 @@ fn build_args_for_tally(tally: [u8; 128]) -> ArgumentList {
     args
 }
 
+/// Check if voter has an active delegation. Returns error if delegation exists.
+/// Looks up the delegation PDA — if it exists and is owned by this program,
+/// the voter must revoke it before voting directly.
+fn check_no_active_delegation(
+    voter: &Pubkey,
+    remaining_accounts: &[AccountInfo],
+    program_id: &Pubkey,
+) -> Result<()> {
+    let (delegation_pda, _) = Pubkey::find_program_address(
+        &[DELEGATION_SEED, voter.as_ref()],
+        program_id,
+    );
+    if let Some(acct) = remaining_accounts.iter().find(|a| a.key() == delegation_pda) {
+        if acct.data_len() > 0 && acct.owner == program_id {
+            return Err(VotingError::ActiveDelegation.into());
+        }
+    }
+    Ok(())
+}
+
 // ==================== PROGRAM ====================
 
 #[program]
@@ -304,19 +324,11 @@ pub mod private_dao_voting {
         );
 
         // Check no active delegation — delegators must revoke before voting directly
-        let (delegation_pda, _) = Pubkey::find_program_address(
-            &[DELEGATION_SEED, ctx.accounts.voter.key().as_ref()],
+        check_no_active_delegation(
+            &ctx.accounts.voter.key(),
+            ctx.remaining_accounts,
             ctx.program_id,
-        );
-        let delegation_info = ctx
-            .remaining_accounts
-            .iter()
-            .find(|a| a.key() == delegation_pda);
-        if let Some(acct) = delegation_info {
-            if acct.data_len() > 0 && acct.owner == ctx.program_id {
-                return Err(VotingError::ActiveDelegation.into());
-            }
-        }
+        )?;
 
         // Token gate: voter must hold the required SPL token
         let token_account = &ctx.accounts.voter_token_account;
@@ -708,19 +720,11 @@ pub mod private_dao_voting {
         );
 
         // Check no active delegation — delegators must revoke before voting directly
-        let (delegation_pda, _) = Pubkey::find_program_address(
-            &[DELEGATION_SEED, ctx.accounts.voter.key().as_ref()],
+        check_no_active_delegation(
+            &ctx.accounts.voter.key(),
+            ctx.remaining_accounts,
             ctx.program_id,
-        );
-        let delegation_info = ctx
-            .remaining_accounts
-            .iter()
-            .find(|a| a.key() == delegation_pda);
-        if let Some(acct) = delegation_info {
-            if acct.data_len() > 0 && acct.owner == ctx.program_id {
-                return Err(VotingError::ActiveDelegation.into());
-            }
-        }
+        )?;
 
         // Token gate: voter must hold the required SPL token
         let token_account = &ctx.accounts.voter_token_account;
