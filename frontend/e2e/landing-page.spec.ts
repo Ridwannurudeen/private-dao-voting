@@ -14,7 +14,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Landing Page - Additional Coverage", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
   });
 
   test("skip-to-content link is present and functional", async ({ page }) => {
@@ -164,7 +164,7 @@ test.describe("Landing Page - Mobile Viewport", () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
   test("mobile: landing page renders hero content", async ({ page }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByText("Privately")).toBeVisible({ timeout: 5000 });
     await expect(page.getByText("on Solana", { exact: true })).toBeVisible({
       timeout: 5000,
@@ -172,7 +172,7 @@ test.describe("Landing Page - Mobile Viewport", () => {
   });
 
   test("mobile: feature cards stack vertically", async ({ page }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     const cards = page.locator(".glass-card-elevated");
     // All three feature cards should be visible on mobile
     await expect(cards.nth(0)).toBeVisible({ timeout: 5000 });
@@ -181,14 +181,14 @@ test.describe("Landing Page - Mobile Viewport", () => {
   });
 
   test("mobile: wallet button is visible and clickable", async ({ page }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     const walletButton = page.locator(".wallet-adapter-button").first();
     await expect(walletButton).toBeVisible({ timeout: 5000 });
     await expect(walletButton).toBeEnabled();
   });
 
   test("mobile: theme toggle is accessible", async ({ page }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     const toggle = page.locator('button[aria-label*="Switch to"]');
     await expect(toggle).toBeVisible({ timeout: 5000 });
     await toggle.click();
@@ -201,7 +201,7 @@ test.describe("Landing Page - Mobile Viewport", () => {
   });
 
   test("mobile: header is not clipped or overflowing", async ({ page }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     const header = page.locator("header").first();
     const box = await header.boundingBox();
     expect(box).not.toBeNull();
@@ -213,14 +213,14 @@ test.describe("Landing Page - Mobile Viewport", () => {
 
 test.describe("Proposal Detail Page - Without Wallet", () => {
   test("shows Proposal Detail header", async ({ page }) => {
-    await page.goto("/proposal/1", { waitUntil: "networkidle" });
+    await page.goto("/proposal/1", { waitUntil: "domcontentloaded" });
     await expect(page.getByText("Proposal Detail")).toBeVisible({
       timeout: 5000,
     });
   });
 
   test("shows back navigation link to home", async ({ page }) => {
-    await page.goto("/proposal/1", { waitUntil: "networkidle" });
+    await page.goto("/proposal/1", { waitUntil: "domcontentloaded" });
     // The back arrow is an SVG inside a Link to "/" — use .first() since
     // "Back to Proposals" button also links to "/"
     const backLink = page.locator('a[href="/"]').first();
@@ -228,13 +228,13 @@ test.describe("Proposal Detail Page - Without Wallet", () => {
   });
 
   test("has wallet connect button in header", async ({ page }) => {
-    await page.goto("/proposal/1", { waitUntil: "networkidle" });
+    await page.goto("/proposal/1", { waitUntil: "domcontentloaded" });
     const walletButton = page.locator(".wallet-adapter-button");
     await expect(walletButton.first()).toBeVisible({ timeout: 5000 });
   });
 
   test("invalid proposal ID shows not found or loading", async ({ page }) => {
-    await page.goto("/proposal/99999999", { waitUntil: "networkidle" });
+    await page.goto("/proposal/99999999", { waitUntil: "domcontentloaded" });
     // Should show either "Proposal Not Found" or a skeleton loader that
     // eventually resolves to not found
     const notFound = page.getByText("Proposal Not Found");
@@ -243,7 +243,7 @@ test.describe("Proposal Detail Page - Without Wallet", () => {
   });
 
   test("proposal detail page has correct title format", async ({ page }) => {
-    await page.goto("/proposal/1", { waitUntil: "networkidle" });
+    await page.goto("/proposal/1", { waitUntil: "domcontentloaded" });
     // Title should match either "Proposal | Private DAO Voting" or "[title] | Private DAO Voting"
     await expect(page).toHaveTitle(/Private DAO Voting/);
   });
@@ -251,7 +251,7 @@ test.describe("Proposal Detail Page - Without Wallet", () => {
   test("proposal page has gradient accent line below header", async ({
     page,
   }) => {
-    await page.goto("/proposal/1", { waitUntil: "networkidle" });
+    await page.goto("/proposal/1", { waitUntil: "domcontentloaded" });
     // Wait for React hydration
     await expect(page.getByText("Proposal Detail")).toBeVisible({ timeout: 5000 });
     // The gradient line is a div with purple gradient
@@ -266,7 +266,7 @@ test.describe("Theme Persistence Across Navigation", () => {
   test("theme persists when navigating to proposal page and back", async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     // Toggle to light mode
     const toggle = page.locator('button[aria-label*="Switch to"]');
     await expect(toggle).toBeVisible({ timeout: 5000 });
@@ -276,14 +276,14 @@ test.describe("Theme Persistence Across Navigation", () => {
     );
     expect(themeBeforeNav).toBe("light");
     // Navigate to proposal page
-    await page.goto("/proposal/1", { waitUntil: "networkidle" });
+    await page.goto("/proposal/1", { waitUntil: "domcontentloaded" });
     // Theme should still be in localStorage
     const themeOnProposal = await page.evaluate(() =>
       localStorage.getItem("theme")
     );
     expect(themeOnProposal).toBe("light");
     // Navigate back
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     const themeAfterReturn = await page.evaluate(() =>
       document.documentElement.getAttribute("data-theme")
     );
@@ -298,7 +298,7 @@ test.describe("Keyboard Interaction", () => {
   test("Escape key does not break page when no modal is open", async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
@@ -309,7 +309,7 @@ test.describe("Keyboard Interaction", () => {
   test("pressing N key on landing page does not open modal (no wallet)", async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     await page.keyboard.press("n");
     // Without wallet, N key should not open create modal
     // The CreateModal's "Create Private Proposal" title should NOT be visible
@@ -320,7 +320,7 @@ test.describe("Keyboard Interaction", () => {
   test("pressing R key on landing page does not cause errors", async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     await page.keyboard.press("r");
     // Page remains stable
     await expect(page.getByText("Privately")).toBeVisible({ timeout: 5000 });
@@ -329,7 +329,7 @@ test.describe("Keyboard Interaction", () => {
   test("pressing V key on landing page does not trigger vote action", async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     await page.keyboard.press("v");
     // No error, page is stable
     await expect(page.getByText("Privately")).toBeVisible({ timeout: 5000 });
@@ -340,7 +340,7 @@ test.describe("Accessibility", () => {
   test("all images and decorative elements have aria-hidden", async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     // Wait for React hydration to complete before checking DOM attributes
     await expect(page.getByText("Privately")).toBeVisible({ timeout: 5000 });
     // Orb elements should be aria-hidden
@@ -351,7 +351,7 @@ test.describe("Accessibility", () => {
   });
 
   test("heading hierarchy: h1 before h2 before h3", async ({ page }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     // Wait for React hydration before querying heading elements
     await expect(page.getByText("Privately")).toBeVisible({ timeout: 5000 });
     const h1 = page.locator("h1");
@@ -366,7 +366,7 @@ test.describe("Accessibility", () => {
   test("wallet dialog has proper role and aria attributes", async ({
     page,
   }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     const walletButton = page.locator(".wallet-adapter-button").first();
     await walletButton.click();
     const dialog = page.getByRole("dialog");

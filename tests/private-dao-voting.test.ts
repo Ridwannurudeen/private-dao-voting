@@ -1,5 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program, BN } from "@coral-xyz/anchor";
+const { Program, BN } = anchor;
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import {
   createMint,
@@ -228,19 +228,47 @@ describe("private-dao-voting", () => {
       expect(proposal.quorum.toNumber()).to.equal(5);
     });
 
-    it("rejects reveal when quorum is not met", async () => {
-      try {
-        await program.methods
-          .devRevealResults(1, 0, 0)
-          .accounts({
-            authority: authority.publicKey,
-            proposal: qProposalPDA,
-          })
-          .rpc();
-        expect.fail("Should have thrown — quorum not met");
-      } catch (err: any) {
-        expect(err.toString()).to.include("QuorumNotReached");
-      }
+    it("reveals with passed=false when quorum is not met", async () => {
+      // Cast one vote so total_votes matches reveal counts
+      const [tallyPDA] = findTallyPDA(qProposalPDA);
+      const [voteRecordPDA] = findVoteRecordPDA(qProposalPDA, authority.publicKey);
+      const voterTokenAccount = getAssociatedTokenAddressSync(gateMint, authority.publicKey);
+
+      await program.methods
+        .devInitTally()
+        .accounts({
+          authority: authority.publicKey,
+          proposal: qProposalPDA,
+          tally: tallyPDA,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+
+      await program.methods
+        .devCastVote(Array(32).fill(0), Array(16).fill(0), Array(32).fill(0))
+        .accounts({
+          voter: authority.publicKey,
+          proposal: qProposalPDA,
+          tally: tallyPDA,
+          voterTokenAccount,
+          voteRecord: voteRecordPDA,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+
+      // Reveal succeeds but passed=false because total_votes(1) < quorum(5)
+      await program.methods
+        .devRevealResults(1, 0, 0)
+        .accounts({
+          authority: authority.publicKey,
+          proposal: qProposalPDA,
+        })
+        .rpc();
+
+      const proposal = await (program.account as any).proposal.fetch(qProposalPDA);
+      expect(proposal.isRevealed).to.be.true;
+      expect(proposal.passed).to.be.false;
     });
   });
 
