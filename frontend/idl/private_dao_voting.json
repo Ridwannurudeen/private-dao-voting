@@ -11,7 +11,7 @@
       "name": "cancel_proposal",
       "docs": [
         "Cancel a proposal (authority only).",
-        "Can only cancel before voting ends OR if no votes have been cast."
+        "Can only cancel if no votes have been cast."
       ],
       "discriminator": [
         106,
@@ -35,6 +35,175 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "cast_delegated_vote",
+      "docs": [
+        "Cast a vote on behalf of a delegator using their token weight.",
+        "The delegate (signer) must be the designated delegate in the Delegation account.",
+        "A VoteRecord is created for the DELEGATOR (not the delegate), preventing the",
+        "delegator from also voting directly. The delegate can still vote separately",
+        "with their own tokens."
+      ],
+      "discriminator": [
+        218,
+        162,
+        136,
+        254,
+        198,
+        95,
+        60,
+        236
+      ],
+      "accounts": [
+        {
+          "name": "delegate",
+          "docs": [
+            "The delegate casting the vote on behalf of the delegator"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "delegator"
+        },
+        {
+          "name": "delegation",
+          "docs": [
+            "The delegation record proving delegate has authority to vote for delegator"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "delegator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "tally",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  108,
+                  108,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "delegator_token_account",
+          "docs": [
+            "The delegator's token account — validated against proposal gate mint"
+          ]
+        },
+        {
+          "name": "vote_record",
+          "docs": [
+            "Vote record keyed to the DELEGATOR so they cannot also vote directly"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              },
+              {
+                "kind": "account",
+                "path": "delegator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "program_config"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "encrypted_choice",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "nonce",
+          "type": {
+            "array": [
+              "u8",
+              16
+            ]
+          }
+        },
+        {
+          "name": "voter_pubkey",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "cast_vote",
@@ -202,6 +371,9 @@
           }
         },
         {
+          "name": "program_config"
+        },
+        {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
@@ -237,6 +409,139 @@
               32
             ]
           }
+        }
+      ]
+    },
+    {
+      "name": "community_create_proposal",
+      "docs": [
+        "Community-governed proposal creation.",
+        "Any wallet holding sufficient governance tokens (as defined in DaoConfig)",
+        "can create a proposal. The proposer becomes the proposal authority.",
+        "Requires DaoConfig to be initialized with governance_mint and min_proposer_balance."
+      ],
+      "discriminator": [
+        204,
+        244,
+        2,
+        66,
+        73,
+        249,
+        176,
+        100
+      ],
+      "accounts": [
+        {
+          "name": "proposer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "proposal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "proposal_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "dao_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  97,
+                  111,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposer_token_account",
+          "docs": [
+            "Proposer's governance token account"
+          ]
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "proposal_id",
+          "type": "u64"
+        },
+        {
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "voting_ends_at",
+          "type": "i64"
+        },
+        {
+          "name": "gate_mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "min_balance",
+          "type": "u64"
+        },
+        {
+          "name": "quorum",
+          "type": "u64"
+        },
+        {
+          "name": "threshold_bps",
+          "type": "u16"
+        },
+        {
+          "name": "privacy_level",
+          "type": "u8"
+        },
+        {
+          "name": "discussion_url",
+          "type": "string"
+        },
+        {
+          "name": "execution_delay",
+          "type": "i64"
         }
       ]
     },
@@ -361,6 +666,9 @@
               }
             ]
           }
+        },
+        {
+          "name": "program_config"
         },
         {
           "name": "system_program",
@@ -568,6 +876,9 @@
           ]
         },
         {
+          "name": "program_config"
+        },
+        {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
@@ -651,6 +962,12 @@
               }
             ]
           }
+        },
+        {
+          "name": "program_config",
+          "docs": [
+            "Passed as AccountInfo for backward compatibility (won't fail if account is missing)."
+          ]
         },
         {
           "name": "system_program",
@@ -822,21 +1139,74 @@
       ]
     },
     {
+      "name": "freeze_program",
+      "docs": [
+        "Freeze the program — blocks new proposals and votes.",
+        "Only the current program authority can invoke this."
+      ],
+      "discriminator": [
+        197,
+        134,
+        244,
+        37,
+        49,
+        38,
+        23,
+        79
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "program_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "init_comp_def",
       "docs": [
         "Initialize computation definitions (called once at deployment).",
         "",
         "Registers the Arcis circuit bytecode on-chain and stores the circuit hash",
         "for integrity verification. The `circuit_hash` parameter must match",
-        "`CIRCUIT_HASH` (compiled from `circuit_hash!(\"voting-circuit\")`).",
+        "`CIRCUIT_HASH`, which is computed at build time by `build.rs` from either",
+        "the compiled circuit binary (`.so`) or the circuit source code (`lib.rs`).",
         "",
         "After initialization, the MXE cluster can execute the following instructions:",
-        "- `initialize_voting` → Creates `Enc<Mxe, Tally>` with zero counters",
-        "- `cast_vote` → Accumulates `Enc<Shared, u8>` into `Enc<Mxe, Tally>`",
-        "- `finalize_and_reveal` → Threshold-decrypts aggregate totals",
-        "- `finalize_with_threshold` → Reveals + checks quorum/threshold",
-        "- `get_live_tally` → Real-time tally for Transparent mode",
-        "- `get_vote_count` → Total participation without breakdown"
+        "- `initialize_voting` -- Creates `Enc<Mxe, Tally>` with zero counters",
+        "- `cast_vote` -- Accumulates `Enc<Shared, u8>` into `Enc<Mxe, Tally>`",
+        "- `finalize_and_reveal` -- Threshold-decrypts aggregate totals",
+        "- `finalize_with_threshold` -- Reveals + checks quorum/threshold",
+        "- `get_live_tally` -- Real-time tally for Transparent mode",
+        "- `get_vote_count` -- Total participation without breakdown"
       ],
       "discriminator": [
         100,
@@ -1021,8 +1391,72 @@
         {
           "name": "slash_if_no_quorum",
           "type": "bool"
+        },
+        {
+          "name": "governance_mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "min_proposer_balance",
+          "type": "u64"
         }
       ]
+    },
+    {
+      "name": "init_program_config",
+      "docs": [
+        "Initialize the ProgramConfig PDA. Sets the caller as the initial authority.",
+        "This is a one-time setup instruction — the PDA is derived from [\"program_config\"]."
+      ],
+      "discriminator": [
+        185,
+        54,
+        237,
+        229,
+        219,
+        179,
+        109,
+        20
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "program_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "init_tally_callback",
@@ -1356,6 +1790,199 @@
       "args": []
     },
     {
+      "name": "transfer_authority",
+      "docs": [
+        "Transfer program authority to a new address (e.g., a Squads multisig).",
+        "Only the current authority can invoke this instruction."
+      ],
+      "discriminator": [
+        48,
+        169,
+        76,
+        72,
+        229,
+        180,
+        55,
+        161
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "program_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_authority",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "unfreeze_program",
+      "docs": [
+        "Unfreeze the program — re-enables proposals and votes.",
+        "Only the current program authority can invoke this."
+      ],
+      "discriminator": [
+        132,
+        209,
+        212,
+        32,
+        49,
+        219,
+        52,
+        33
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "program_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_dao_config",
+      "docs": [
+        "Update DAO configuration (admin only)"
+      ],
+      "discriminator": [
+        23,
+        231,
+        45,
+        34,
+        236,
+        138,
+        109,
+        102
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "dao_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  97,
+                  111,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "deposit_mint",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "proposal_deposit",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "treasury",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "slash_if_no_quorum",
+          "type": {
+            "option": "bool"
+          }
+        },
+        {
+          "name": "governance_mint",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "min_proposer_balance",
+          "type": {
+            "option": "u64"
+          }
+        }
+      ]
+    },
+    {
       "name": "vote_callback",
       "docs": [
         "Callback from Arcium after vote computation completes"
@@ -1491,6 +2118,19 @@
       ]
     },
     {
+      "name": "ProgramConfig",
+      "discriminator": [
+        196,
+        210,
+        90,
+        231,
+        144,
+        149,
+        140,
+        63
+      ]
+    },
+    {
       "name": "Proposal",
       "discriminator": [
         26,
@@ -1532,6 +2172,32 @@
   ],
   "events": [
     {
+      "name": "AuthorityTransferred",
+      "discriminator": [
+        245,
+        109,
+        179,
+        54,
+        135,
+        92,
+        22,
+        64
+      ]
+    },
+    {
+      "name": "DelegatedVoteCast",
+      "discriminator": [
+        145,
+        127,
+        61,
+        137,
+        170,
+        103,
+        230,
+        178
+      ]
+    },
+    {
       "name": "DelegationRevoked",
       "discriminator": [
         59,
@@ -1542,6 +2208,19 @@
         116,
         220,
         8
+      ]
+    },
+    {
+      "name": "ProgramFreezeToggled",
+      "discriminator": [
+        201,
+        202,
+        78,
+        12,
+        214,
+        71,
+        179,
+        131
       ]
     },
     {
@@ -1719,10 +2398,66 @@
     {
       "code": 6021,
       "name": "CannotCancelAfterVotes",
-      "msg": "Cannot cancel proposal after votes have been cast and voting has ended"
+      "msg": "Cannot cancel proposal after votes have been cast"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidTitleLength",
+      "msg": "Title must be between 1 and 100 characters"
+    },
+    {
+      "code": 6023,
+      "name": "InvalidDescriptionLength",
+      "msg": "Description must be between 1 and 5000 characters"
+    },
+    {
+      "code": 6024,
+      "name": "InvalidVotingEndTime",
+      "msg": "Voting end time must be in the future"
+    },
+    {
+      "code": 6025,
+      "name": "InvalidGovernanceMint",
+      "msg": "Governance token mint does not match DaoConfig"
+    },
+    {
+      "code": 6026,
+      "name": "InsufficientProposerBalance",
+      "msg": "Insufficient governance token balance to create proposal"
+    },
+    {
+      "code": 6027,
+      "name": "ProgramFrozen",
+      "msg": "Program is frozen: new proposals and votes are temporarily blocked"
+    },
+    {
+      "code": 6028,
+      "name": "InvalidAuthority",
+      "msg": "Invalid authority: cannot transfer to zero address"
+    },
+    {
+      "code": 6029,
+      "name": "InvalidDelegateForDelegation",
+      "msg": "Delegate does not match delegation record"
     }
   ],
   "types": [
+    {
+      "name": "AuthorityTransferred",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
     {
       "name": "CompDefState",
       "docs": [
@@ -1807,8 +2542,42 @@
             "type": "bool"
           },
           {
+            "name": "governance_mint",
+            "docs": [
+              "Governance token mint — proposers must hold this token to create proposals"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "min_proposer_balance",
+            "docs": [
+              "Minimum governance token balance required to create a community proposal"
+            ],
+            "type": "u64"
+          },
+          {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DelegatedVoteCast",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal",
+            "type": "pubkey"
+          },
+          {
+            "name": "delegate",
+            "type": "pubkey"
+          },
+          {
+            "name": "delegator",
+            "type": "pubkey"
           }
         ]
       }
@@ -1849,6 +2618,55 @@
           {
             "name": "delegate",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProgramConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "Current program authority (can be a multisig address)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "is_frozen",
+            "docs": [
+              "Emergency freeze flag — when true, new proposals and votes are blocked"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Timestamp when this config was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProgramFreezeToggled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_frozen",
+            "type": "bool"
           }
         ]
       }
