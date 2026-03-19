@@ -21,12 +21,12 @@ test.describe("Landing Page - Additional Coverage", () => {
     // The _document.tsx has a skip link targeting #main-content
     const skipLink = page.locator('a[href="#main-content"]');
     // It should exist (sr-only by default)
-    await expect(skipLink).toHaveCount(1);
-    // Tab to it to make it visible
+    await expect(skipLink).toBeAttached({ timeout: 5000 });
+    // Reset focus to body for consistent Tab behavior
+    await page.evaluate(() => (document.body as HTMLElement).focus());
     await page.keyboard.press("Tab");
     // Focus should land on the skip link
-    const focused = await page.evaluate(() => document.activeElement?.getAttribute("href"));
-    expect(focused).toBe("#main-content");
+    await expect(skipLink).toBeFocused({ timeout: 5000 });
   });
 
   test("theme toggle has correct aria-label for current state", async ({ page }) => {
@@ -284,8 +284,12 @@ test.describe("Theme Persistence Across Navigation", () => {
     expect(themeOnProposal).toBe("light");
     // Navigate back
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    // Wait for React hydration before checking theme attribute
-    await expect(page.locator('button[aria-label*="Switch to"]')).toBeVisible({ timeout: 5000 });
+    // Wait for theme to be applied from localStorage after hydration
+    await page.waitForFunction(
+      () => document.documentElement.getAttribute("data-theme") === "light",
+      null,
+      { timeout: 10000 }
+    );
     const themeAfterReturn = await page.evaluate(() =>
       document.documentElement.getAttribute("data-theme")
     );
