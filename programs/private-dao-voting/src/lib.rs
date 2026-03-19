@@ -218,12 +218,8 @@ fn check_no_active_delegation(
 /// could bypass the freeze by passing a garbage account, but the freeze is an
 /// administrative safeguard (not a security boundary) and the on-chain PDA derivation
 /// ensures only the correct account can match.
-fn check_not_frozen(
-    program_config_account: &AccountInfo,
-    program_id: &Pubkey,
-) -> Result<()> {
-    let (expected_pda, _) =
-        Pubkey::find_program_address(&[PROGRAM_CONFIG_SEED], program_id);
+fn check_not_frozen(program_config_account: &AccountInfo, program_id: &Pubkey) -> Result<()> {
+    let (expected_pda, _) = Pubkey::find_program_address(&[PROGRAM_CONFIG_SEED], program_id);
 
     // If the account key doesn't match the expected PDA, skip the check (backward compat)
     if program_config_account.key() != expected_pda {
@@ -844,10 +840,7 @@ pub mod private_dao_voting {
         check_not_frozen(&ctx.accounts.program_config, ctx.program_id)?;
 
         // Validate proposal is still active
-        require!(
-            ctx.accounts.proposal.is_active,
-            VotingError::VotingClosed
-        );
+        require!(ctx.accounts.proposal.is_active, VotingError::VotingClosed);
 
         let clock = Clock::get()?;
         require!(
@@ -867,18 +860,15 @@ pub mod private_dao_voting {
 
         // Token gate: check the DELEGATOR's token balance against proposal requirements
         require!(
-            ctx.accounts.delegator_token_account.owner
-                == ctx.accounts.delegator.key(),
+            ctx.accounts.delegator_token_account.owner == ctx.accounts.delegator.key(),
             VotingError::InvalidTokenAccount
         );
         require!(
-            ctx.accounts.delegator_token_account.mint
-                == ctx.accounts.proposal.gate_mint,
+            ctx.accounts.delegator_token_account.mint == ctx.accounts.proposal.gate_mint,
             VotingError::InvalidTokenMint
         );
         require!(
-            ctx.accounts.delegator_token_account.amount
-                >= ctx.accounts.proposal.min_balance,
+            ctx.accounts.delegator_token_account.amount >= ctx.accounts.proposal.min_balance,
             VotingError::InsufficientTokenBalance
         );
 
