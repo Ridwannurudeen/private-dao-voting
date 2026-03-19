@@ -13,12 +13,13 @@ no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
-default = []
+default = ["arcium"]
 dev-mode = []
+arcium = ["dep:arcium-client"]
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 
 [dependencies]
 anchor-lang = "0.32.1"
 anchor-spl = "0.32.1"
-arcium-client = { version = "0.9.2", default-features = false }
+arcium-client = { version = "0.9.2", default-features = false, optional = true }
 getrandom = { version = "=0.2.12", default-features = false, features = ["custom"] }

@@ -8,7 +8,7 @@
     "test": "ts-mocha -p ./tsconfig.json -t 30000 mock-arcium.test.ts",
     "test:unit": "ts-mocha -p ./tsconfig.json -t 30000 mock-arcium.test.ts",
     "test:integration": "ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts",
-    "test:anchor": "anchor test",
+    "test:anchor": "anchor test -- --features dev-mode --no-default-features",
     "test:e2e": "anchor test --skip-local-validator",
     "test:all": "npm run test:unit && npm run test:integration",
     "test:watch": "ts-mocha -p ./tsconfig.json tests/**/*.test.ts --watch --timeout 30000",
