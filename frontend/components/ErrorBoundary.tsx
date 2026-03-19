@@ -36,7 +36,9 @@ export class ErrorBoundary extends React.Component<
             </div>
             <h2 className="text-xl font-bold text-white mb-2">Something went wrong</h2>
             <p className="text-gray-400 text-sm mb-4">
-              {this.state.error?.message || "An unexpected error occurred"}
+              {process.env.NODE_ENV === "development"
+                ? (this.state.error?.message || "An unexpected error occurred")
+                : "An unexpected error occurred. Please reload the page."}
             </p>
             <button
               onClick={() => {

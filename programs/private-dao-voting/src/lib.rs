@@ -290,6 +290,10 @@ pub mod private_dao_voting {
         );
         require!(privacy_level <= 2, VotingError::InvalidPrivacyLevel);
         require!(execution_delay >= 0, VotingError::InvalidExecutionDelay);
+        require!(
+            discussion_url.len() <= 256,
+            VotingError::InvalidDiscussionUrlLength
+        );
 
         // Validate voting end time is in the future
         let clock = Clock::get()?;
@@ -755,6 +759,10 @@ pub mod private_dao_voting {
         );
         require!(privacy_level <= 2, VotingError::InvalidPrivacyLevel);
         require!(execution_delay >= 0, VotingError::InvalidExecutionDelay);
+        require!(
+            discussion_url.len() <= 256,
+            VotingError::InvalidDiscussionUrlLength
+        );
 
         // Validate voting end time is in the future
         let clock = Clock::get()?;
@@ -799,6 +807,12 @@ pub mod private_dao_voting {
     /// The delegator's token-gated vote weight is transferred to the delegate.
     /// Delegators cannot vote directly while their delegation is active.
     pub fn delegate_vote(ctx: Context<DelegateVote>) -> Result<()> {
+        // Prevent self-delegation
+        require!(
+            ctx.accounts.delegator.key() != ctx.accounts.delegate.key(),
+            VotingError::CannotSelfDelegate
+        );
+
         let delegation = &mut ctx.accounts.delegation;
         delegation.delegator = ctx.accounts.delegator.key();
         delegation.delegate = ctx.accounts.delegate.key();
@@ -964,7 +978,12 @@ pub mod private_dao_voting {
 
         // Dev mode: directly update tally nonce and vote counter
         ctx.accounts.tally.nonce = nonce;
-        ctx.accounts.proposal.total_votes += 1;
+        ctx.accounts.proposal.total_votes = ctx
+            .accounts
+            .proposal
+            .total_votes
+            .checked_add(1)
+            .ok_or(VotingError::ArithmeticOverflow)?;
 
         emit!(VoteCast {
             proposal: ctx.accounts.proposal.key(),
@@ -986,24 +1005,19 @@ pub mod private_dao_voting {
     ) -> Result<()> {
         let proposal = &mut ctx.accounts.proposal;
 
-        // Allow permissionless reveal after voting ends
+        // Prevent re-reveal
+        require!(!proposal.is_revealed, VotingError::AlreadyRevealed);
+
+        // Allow permissionless reveal after voting ends, authority-only before deadline
         let clock = Clock::get()?;
         if clock.unix_timestamp < proposal.voting_ends_at {
-            // Before deadline: only authority can reveal
+            // Before deadline: only authority can reveal early
             require!(
                 ctx.accounts.authority.key() == proposal.authority,
                 VotingError::Unauthorized
             );
         }
         // After deadline: anyone can trigger reveal
-
-        // Prevent re-reveal
-        require!(!proposal.is_revealed, VotingError::AlreadyRevealed);
-
-        require!(
-            clock.unix_timestamp >= proposal.voting_ends_at,
-            VotingError::VotingNotEnded
-        );
 
         // Checked arithmetic to prevent overflow
         let total_votes = yes_count
@@ -1175,6 +1189,9 @@ pub mod private_dao_voting {
         discussion_url: String,
         execution_delay: i64,
     ) -> Result<()> {
+        // Freeze check
+        check_not_frozen(&ctx.accounts.program_config, ctx.program_id)?;
+
         // Validate V2 fields
         require!(
             threshold_bps > 0 && threshold_bps <= 10_000,
@@ -1182,6 +1199,10 @@ pub mod private_dao_voting {
         );
         require!(privacy_level <= 2, VotingError::InvalidPrivacyLevel);
         require!(execution_delay >= 0, VotingError::InvalidExecutionDelay);
+        require!(
+            discussion_url.len() <= 256,
+            VotingError::InvalidDiscussionUrlLength
+        );
 
         // Validate title and description lengths
         require!(
@@ -1887,6 +1908,9 @@ pub struct CommunityCreateProposal<'info> {
     )]
     pub proposer_token_account: Account<'info, TokenAccount>,
 
+    /// CHECK: ProgramConfig PDA for freeze check
+    pub program_config: AccountInfo<'info>,
+
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
@@ -2203,4 +2227,8 @@ pub enum VotingError {
     InvalidAuthority,
     #[msg("Delegate does not match delegation record")]
     InvalidDelegateForDelegation,
+    #[msg("Discussion URL must be at most 256 characters")]
+    InvalidDiscussionUrlLength,
+    #[msg("Cannot delegate to yourself")]
+    CannotSelfDelegate,
 }

@@ -90,6 +90,7 @@ export default function ProposalDetail() {
   const [tokenBalance, setTokenBalance] = useState(-1);
   const [claiming, setClaiming] = useState(false);
   const [isEncrypting, setIsEncrypting] = useState(false);
+  const [currentVoteStep, setCurrentVoteStep] = useState<VoteStep>("idle");
   const [arciumClient, setArciumClient] = useState<ArciumClient | null>(null);
 
   const [devTallies, setDevTallies] = useState<Record<string, { yes: number; no: number; abstain: number }>>(() => {
@@ -159,9 +160,16 @@ export default function ProposalDetail() {
   /* ---- fetch proposal (read-only, no wallet needed) ---- */
   const loadProposal = useCallback(async () => {
     if (!id) return;
+    // Validate id is a numeric string before constructing BN
+    const idStr = String(id);
+    if (!/^\d+$/.test(idStr)) {
+      setNotFound(true);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const proposalId = new BN(id as string);
+      const proposalId = new BN(idStr);
       const [proposalPDA] = findProposalPDA(proposalId);
       const program = getReadOnlyProgram(readOnlyConnection);
       const a = await (program.account as any).proposal.fetch(proposalPDA);
@@ -228,6 +236,7 @@ export default function ProposalDetail() {
     if (!program || !publicKey) return;
     const key = p.publicKey.toString();
     setVoting(true);
+    setCurrentVoteStep("encrypting");
 
     try {
       let client = arciumClient;
@@ -243,6 +252,7 @@ export default function ProposalDetail() {
       const encryptedVote = await client.encryptVote(voteValue, p.publicKey, publicKey);
       const secretInput = client.toSecretInput(encryptedVote);
       setIsEncrypting(false);
+      setCurrentVoteStep("submitting");
 
       await ensureTallyInitialized(program, publicKey, p.publicKey);
 
@@ -262,6 +272,8 @@ export default function ProposalDetail() {
         );
       }
 
+      setCurrentVoteStep("processing");
+
       if (DEVELOPMENT_MODE || (client && client.isFallback())) {
         setDevTallies((prev) => {
           const current = prev[key] || { yes: 0, no: 0, abstain: 0 };
@@ -278,6 +290,9 @@ export default function ProposalDetail() {
         });
       }
 
+      await new Promise((r) => setTimeout(r, 800));
+      setCurrentVoteStep("confirmed");
+
       setToast({ message: "Encrypted vote recorded on-chain!", type: "success", txUrl: explorerTxUrl(txSig) });
       setVoted(true);
       setSelected(null);
@@ -285,6 +300,7 @@ export default function ProposalDetail() {
     } catch (e: any) {
       console.error("Vote error:", e);
       setIsEncrypting(false);
+      setCurrentVoteStep("idle");
       setToast({ message: parseAnchorError(e), type: "error" });
     }
     setVoting(false);
@@ -315,7 +331,7 @@ export default function ProposalDetail() {
       const res = await fetch("/api/faucet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress: publicKey.toBase58(), gateMint: p.gateMint?.toBase58?.() || p.gateMint }),
+        body: JSON.stringify({ walletAddress: publicKey.toBase58() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Faucet request failed");
@@ -577,7 +593,7 @@ export default function ProposalDetail() {
                             {voting ? (isEncrypting ? "Encrypting vote..." : "Submitting to Solana...") : "Submit Encrypted Vote"}
                           </button>
                           {voting && (
-                            <VoteProgress step={"idle" as VoteStep} onComplete={() => {}} />
+                            <VoteProgress step={currentVoteStep} onComplete={() => setCurrentVoteStep("idle")} />
                           )}
                         </>
                       )}

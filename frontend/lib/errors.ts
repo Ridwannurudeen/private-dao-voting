@@ -76,5 +76,8 @@ export function parseAnchorError(error: any): string {
 const cluster = process.env.NEXT_PUBLIC_NETWORK || "devnet";
 
 export function explorerTxUrl(signature: string): string {
-  return `https://explorer.solana.com/tx/${signature}?cluster=${cluster}`;
+  // Solana tx signatures are base58-encoded (alphanumeric, no special chars).
+  // Sanitize to prevent URL injection via crafted signature strings.
+  const sanitized = signature.replace(/[^A-Za-z0-9]/g, "");
+  return `https://explorer.solana.com/tx/${encodeURIComponent(sanitized)}?cluster=${encodeURIComponent(cluster)}`;
 }

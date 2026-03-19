@@ -749,6 +749,7 @@ export async function communityCreateProposal(
   const proposalId = new BN(proposalIdBytes, "le");
   const [proposalPDA] = findProposalPDA(proposalId);
   const [daoConfigPDA] = findDaoConfigPDA();
+  const [programConfigPDA] = findProgramConfigPDA();
   const votingEndsAt = new BN(Math.floor(Date.now() / 1000) + durationSeconds);
   const proposerTokenAccount = getAssociatedTokenAddressSync(governanceMint, proposer);
 
@@ -772,6 +773,7 @@ export async function communityCreateProposal(
         proposal: proposalPDA,
         daoConfig: daoConfigPDA,
         proposerTokenAccount,
+        programConfig: programConfigPDA,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })

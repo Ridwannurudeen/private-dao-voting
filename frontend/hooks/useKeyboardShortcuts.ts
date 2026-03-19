@@ -6,6 +6,7 @@ interface ShortcutHandlers {
   onClose?: () => void;
   onRefresh?: () => void;
   onNewProposal?: () => void;
+  onDevConsole?: () => void;
 }
 
 export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
@@ -36,6 +37,12 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
           if (!e.ctrlKey && !e.metaKey) {
             e.preventDefault();
             handlers.onNewProposal?.();
+          }
+          break;
+        case "d":
+          if (!e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            handlers.onDevConsole?.();
           }
           break;
       }

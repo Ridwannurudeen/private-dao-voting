@@ -41,6 +41,7 @@ export async function withRetry<T>(
         msg.includes("429") ||
         msg.includes("Too Many Requests") ||
         msg.includes("blockhash not found") ||
+        msg.includes("Blockhash not found") ||
         msg.includes("503") ||
         msg.includes("502");
 

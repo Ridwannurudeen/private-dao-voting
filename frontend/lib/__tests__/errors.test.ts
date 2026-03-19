@@ -194,6 +194,98 @@ describe("parseAnchorError", () => {
             "Transaction failed. Check your token balance and try again."
         );
     });
+
+    it("maps CannotCancelAfterVotes to friendly message", () => {
+        expect(parseAnchorError({ message: "CannotCancelAfterVotes" })).toBe(
+            "This proposal cannot be cancelled because votes have been cast and the voting period has ended."
+        );
+    });
+
+    it("maps InvalidDelegateForDelegation to friendly message", () => {
+        expect(parseAnchorError({ message: "InvalidDelegateForDelegation" })).toBe(
+            "You are not authorized to vote on behalf of this delegator."
+        );
+    });
+
+    it("handles error with msg property instead of message", () => {
+        const result = parseAnchorError({ msg: "VotingEnded" });
+        expect(result).toBe("Voting has ended for this proposal.");
+    });
+
+    it("handles error with toString method", () => {
+        const error = {
+            toString: () => "AlreadyVoted",
+        };
+        const result = parseAnchorError(error);
+        expect(result).toBe("You've already cast your vote on this proposal.");
+    });
+
+    it("handles object with toString returning [object Object]", () => {
+        // Object with no useful toString falls to JSON.stringify
+        const error = { code: 99, data: "stuff" };
+        const result = parseAnchorError(error);
+        expect(typeof result).toBe("string");
+        expect(result.length).toBeGreaterThan(0);
+    });
+
+    it("handles Unknown action with logs containing AlreadyVoted", () => {
+        const error = {
+            message: "Unknown action 'undefined'",
+            logs: [
+                "Program log: Error Number: 6005. Error Message: AlreadyVoted.",
+            ],
+        };
+        const result = parseAnchorError(error);
+        expect(result).toBe("You've already cast your vote on this proposal.");
+    });
+
+    it("handles Unknown action with transactionLogs instead of logs", () => {
+        const error = {
+            message: "Unknown action 'undefined'",
+            transactionLogs: [
+                "Program log: Error Number: 6003. Error Message: NotAuthority.",
+            ],
+        };
+        const result = parseAnchorError(error);
+        expect(result).toBe("Only the proposal authority can perform this action.");
+    });
+
+    it("handles Unknown action with empty logs array", () => {
+        const error = {
+            message: "Unknown action 'undefined'",
+            logs: [],
+        };
+        const result = parseAnchorError(error);
+        expect(result).toBe(
+            "Transaction failed. Check your token balance and try again."
+        );
+    });
+
+    it("handles number error input", () => {
+        // Number has a toString, so it should work
+        const result = parseAnchorError(42);
+        expect(typeof result).toBe("string");
+    });
+
+    it("exact 120 character message is not truncated", () => {
+        const msg = "A".repeat(120);
+        const result = parseAnchorError({ message: msg });
+        expect(result).toBe(msg);
+        expect(result.length).toBe(120);
+    });
+
+    it("121 character message IS truncated", () => {
+        const msg = "A".repeat(121);
+        const result = parseAnchorError({ message: msg });
+        expect(result.length).toBe(123); // 120 + "..."
+        expect(result.endsWith("...")).toBe(true);
+    });
+
+    it("handles custom program error: 0x0", () => {
+        // 0x0 should not match the 0x1 pattern
+        const result = parseAnchorError({ message: "custom program error: 0x0" });
+        expect(result).not.toBe("You don't have enough SOL to pay for this transaction.");
+    });
 });
 
 describe("explorerTxUrl", () => {
