@@ -9,9 +9,16 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import { expect } from "chai";
+import * as fs from "fs";
+import * as path from "path";
 
 // Load IDL from frontend build output
-const idl = require("../frontend/idl/private_dao_voting.json");
+const idl = JSON.parse(
+  fs.readFileSync(
+    path.join(process.cwd(), "frontend/idl/private_dao_voting.json"),
+    "utf-8"
+  )
+);
 
 const PROGRAM_ID = new PublicKey(idl.address);
 

@@ -521,7 +521,7 @@ export default function ProposalDetail() {
               {/* ======= Ended but not revealed (visible to everyone) ======= */}
               {!active && !proposal.isRevealed && !(isAuthority && isEnded && proposal.isActive) && (
                 <div className="mt-4 pt-4 border-t border-white/10 text-xs text-gray-400">
-                  Voting ended. Pending reveal by the proposal authority.
+                  Voting ended. Anyone can trigger the reveal.
                 </div>
               )}
             </article>

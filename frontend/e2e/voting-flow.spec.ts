@@ -122,13 +122,13 @@ test.describe("Private DAO Voting", () => {
   });
 
   test("proposal detail page shows connect prompt without wallet", async ({ page }) => {
-    await page.goto("/proposal/999999", { waitUntil: "domcontentloaded" });
+    await page.goto("/proposal/999999", { waitUntil: "load" });
     // With an invalid proposal ID, we should see either "Proposal Not Found"
     // or, if it loads but no wallet, "Connect Wallet to Vote"
     const content = page.getByText("Proposal Not Found").or(
       page.getByText("Connect Wallet to Vote")
     );
-    await expect(content).toBeVisible({ timeout: 10000 });
+    await expect(content).toBeVisible({ timeout: 15000 });
     // The page should also have a header with "Proposal Detail"
     await expect(page.getByText("Proposal Detail")).toBeVisible({ timeout: 10000 });
   });

@@ -23,6 +23,8 @@ export default function Document() {
         <meta name="theme-color" content="#0a0a1a" />
       </Head>
       <body className="font-sans antialiased">
+        {/* Blocking script: apply persisted theme before React hydrates to prevent FOUC */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}})()` }} />
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-cyan-600 focus:text-white focus:rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400">
           Skip to main content
         </a>
