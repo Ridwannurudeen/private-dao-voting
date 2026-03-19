@@ -221,8 +221,9 @@ test.describe("Proposal Detail Page - Without Wallet", () => {
 
   test("shows back navigation link to home", async ({ page }) => {
     await page.goto("/proposal/1", { waitUntil: "networkidle" });
-    // The back arrow is an SVG inside a Link to "/"
-    const backLink = page.locator('a[href="/"]');
+    // The back arrow is an SVG inside a Link to "/" — use .first() since
+    // "Back to Proposals" button also links to "/"
+    const backLink = page.locator('a[href="/"]').first();
     await expect(backLink).toBeVisible({ timeout: 5000 });
   });
 
