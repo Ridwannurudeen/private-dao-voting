@@ -60,9 +60,13 @@
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
+#[cfg(feature = "arcium")]
 use arcium_client::idl::arcium::cpi::{accounts::QueueComputation, queue_computation};
+#[cfg(feature = "arcium")]
 use arcium_client::idl::arcium::program::Arcium;
+#[cfg(feature = "arcium")]
 use arcium_client::idl::arcium::types::{ArgumentList, ArgumentRef, CallbackInstruction};
+#[cfg(feature = "arcium")]
 use arcium_client::pda::comp_def_offset;
 
 declare_id!("71tbXM3A2j5pKHfjtu1LYgY8jfQWuoZtHecDu6F6EPJH");
@@ -129,6 +133,7 @@ pub const CIRCUIT_HASH: &str = include_str!(concat!(env!("OUT_DIR"), "/circuit_h
 #[cfg(feature = "dev-mode")]
 pub const CIRCUIT_HASH: &str = "dev-mode-circuit-hash-placeholder";
 
+#[cfg(feature = "arcium")]
 fn split_ciphertext_128(data: [u8; 128]) -> [[u8; 32]; 4] {
     let mut out = [[0u8; 32]; 4];
     for i in 0..4 {
@@ -137,6 +142,7 @@ fn split_ciphertext_128(data: [u8; 128]) -> [[u8; 32]; 4] {
     out
 }
 
+#[cfg(feature = "arcium")]
 fn build_args_for_vote(encrypted_choice: [u8; 32], tally: [u8; 128]) -> ArgumentList {
     let mut args = ArgumentList {
         args: Vec::new(),
@@ -159,6 +165,7 @@ fn build_args_for_vote(encrypted_choice: [u8; 32], tally: [u8; 128]) -> Argument
     args
 }
 
+#[cfg(feature = "arcium")]
 fn build_args_for_tally(tally: [u8; 128]) -> ArgumentList {
     let mut args = ArgumentList {
         args: Vec::new(),
@@ -251,6 +258,7 @@ pub mod private_dao_voting {
     use super::*;
 
     /// Create a new proposal and initialize encrypted tally
+    #[cfg(feature = "arcium")]
     pub fn create_proposal(
         ctx: Context<CreateProposal>,
         proposal_id: u64,
@@ -375,6 +383,7 @@ pub mod private_dao_voting {
     }
 
     /// Callback from Arcium after init_tally completes
+    #[cfg(feature = "arcium")]
     pub fn init_tally_callback(
         ctx: Context<InitTallyCallback>,
         encrypted_tally: [u8; 128], // Encrypted VoteTally
@@ -390,6 +399,7 @@ pub mod private_dao_voting {
     }
 
     /// Cast an encrypted vote
+    #[cfg(feature = "arcium")]
     pub fn cast_vote(
         ctx: Context<CastVote>,
         encrypted_choice: [u8; 32],
@@ -488,6 +498,7 @@ pub mod private_dao_voting {
     }
 
     /// Callback from Arcium after vote computation completes
+    #[cfg(feature = "arcium")]
     pub fn vote_callback(
         ctx: Context<VoteCallback>,
         new_encrypted_tally: [u8; 128],
@@ -515,6 +526,7 @@ pub mod private_dao_voting {
     /// Reveal the final vote results.
     /// After the voting deadline, anyone can trigger reveal (permissionless).
     /// Before the deadline, only the proposal authority can reveal early.
+    #[cfg(feature = "arcium")]
     pub fn reveal_results(ctx: Context<RevealResults>) -> Result<()> {
         let proposal = &ctx.accounts.proposal;
 
@@ -572,6 +584,7 @@ pub mod private_dao_voting {
 
     /// Callback from Arcium with revealed results
     /// Only callable by the Arcium program via CPI (validated by sign PDA signer constraint)
+    #[cfg(feature = "arcium")]
     pub fn reveal_results_callback(
         ctx: Context<RevealResultsCallback>,
         yes_count: u64,
@@ -1349,6 +1362,7 @@ pub mod private_dao_voting {
 
 // ==================== ACCOUNT STRUCTURES ====================
 
+#[cfg(feature = "arcium")]
 #[derive(Accounts)]
 #[instruction(proposal_id: u64)]
 pub struct CreateProposal<'info> {
@@ -1405,6 +1419,7 @@ pub struct CreateProposal<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[cfg(feature = "arcium")]
 #[derive(Accounts)]
 pub struct InitTallyCallback<'info> {
     #[account(
@@ -1438,6 +1453,7 @@ pub struct InitTallyCallback<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[cfg(feature = "arcium")]
 #[derive(Accounts)]
 pub struct CastVote<'info> {
     #[account(mut)]
@@ -1512,6 +1528,7 @@ pub struct CastVote<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[cfg(feature = "arcium")]
 #[derive(Accounts)]
 pub struct VoteCallback<'info> {
     #[account(mut)]
@@ -1533,6 +1550,7 @@ pub struct VoteCallback<'info> {
     pub sign_seed: AccountInfo<'info>,
 }
 
+#[cfg(feature = "arcium")]
 #[derive(Accounts)]
 pub struct RevealResults<'info> {
     #[account(mut)]
@@ -1581,6 +1599,7 @@ pub struct RevealResults<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[cfg(feature = "arcium")]
 #[derive(Accounts)]
 pub struct RevealResultsCallback<'info> {
     #[account(mut)]
