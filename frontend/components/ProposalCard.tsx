@@ -9,6 +9,13 @@ import { ExportResults } from "./ExportResults";
 import { EncryptionAnimation } from "./EncryptionAnimation";
 import { VoteProgress, VoteStep } from "./VoteProgress";
 
+export interface ExecutionPayloadData {
+  payloadType: any;
+  isDecrypted: boolean;
+  executed: boolean;
+  executionEligibleAt: number;
+}
+
 export interface Proposal {
   publicKey: PublicKey;
   id: BN;
@@ -24,6 +31,10 @@ export interface Proposal {
   yesVotes: number;
   noVotes: number;
   abstainVotes: number;
+  passed?: boolean;
+  executionDelay?: number;
+  executed?: boolean;
+  executionPayload?: ExecutionPayloadData | null;
 }
 
 function formatTime(secondsRemaining: number): string {
@@ -69,6 +80,9 @@ interface ProposalCardProps {
   delegatedSelected?: Record<string, "yes" | "no" | "abstain" | null>;
   onDelegatedSelectChoice?: (delegatorKey: string, choice: "yes" | "no" | "abstain") => void;
   onDelegatedVote?: (delegator: PublicKey, choice: "yes" | "no" | "abstain") => void;
+  // Execution props
+  isExecuting?: boolean;
+  onExecute?: () => void;
 }
 
 export function ProposalCard({
@@ -97,6 +111,8 @@ export function ProposalCard({
   delegatedSelected = {},
   onDelegatedSelectChoice,
   onDelegatedVote,
+  isExecuting = false,
+  onExecute,
 }: ProposalCardProps) {
   // Real-time countdown
   const [liveRemaining, setLiveRemaining] = useState(Number(p.votingEndsAt) - nowTs);
@@ -355,6 +371,52 @@ export function ProposalCard({
           </div>
           <p className="text-center text-xs text-gray-400 mt-2">Total: {total} votes</p>
           <ExportResults proposal={p} />
+
+          {/* Execution payload status */}
+          {p.executionPayload && (() => {
+            const ep = p.executionPayload;
+            const payloadTypeLabel = (() => {
+              const pt = ep.payloadType;
+              if (pt && typeof pt === "object" && "treasuryTransfer" in pt) return "Treasury Transfer";
+              if (pt && typeof pt === "object" && "configChange" in pt) return "Config Change";
+              if (pt === 1) return "Treasury Transfer";
+              if (pt === 2) return "Config Change";
+              return null;
+            })();
+
+            if (!payloadTypeLabel) return null;
+
+            const nowSec = Math.floor(Date.now() / 1000);
+            const timelockRemaining = ep.executionEligibleAt > 0 ? ep.executionEligibleAt - nowSec : 0;
+            const canExecute = ep.isDecrypted && !ep.executed && timelockRemaining <= 0 && p.passed;
+
+            return (
+              <div className="mt-3 pt-3 border-t border-white/10">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded-full text-xs font-medium">
+                    {payloadTypeLabel}
+                  </span>
+                  <span className={`text-xs font-medium ${
+                    ep.executed ? "text-green-400" :
+                    canExecute ? "text-cyan-400" :
+                    timelockRemaining > 0 ? "text-yellow-400" :
+                    !ep.isDecrypted ? "text-gray-400" : "text-gray-400"
+                  }`}>
+                    {ep.executed ? "Executed" :
+                     canExecute ? "Ready to Execute" :
+                     timelockRemaining > 0 ? `Timelocked (${formatTime(timelockRemaining)})` :
+                     !ep.isDecrypted ? "Pending Decryption" : "Pending"}
+                  </span>
+                </div>
+                {canExecute && onExecute && (
+                  <button onClick={onExecute} disabled={isExecuting}
+                    className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-cyan-500 rounded-xl text-sm font-semibold disabled:opacity-50 hover:shadow-lg hover:shadow-purple-500/20 transition-all text-white">
+                    {isExecuting ? "Executing..." : "Execute Action"}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 

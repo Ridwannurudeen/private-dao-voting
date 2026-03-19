@@ -93,6 +93,13 @@ export function findDaoConfigPDA(): [PublicKey, number] {
   );
 }
 
+export function findPayloadPDA(proposalPubkey: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("payload"), proposalPubkey.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
 // Get program instance from the generated IDL
 export function getProgram(provider: AnchorProvider, idl: Idl): Program {
   return new Program(idl, provider);
@@ -794,4 +801,149 @@ export async function communityCreateProposal(
   );
 
   return { tx, proposalId, proposalPDA };
+}
+
+// ==================== EXECUTION ENGINE ====================
+
+// Serialize a TreasuryTransfer payload into bytes:
+// bytes 0-31: recipient pubkey, 32-63: mint pubkey, 64-71: amount (u64 LE)
+export function serializeTreasuryTransfer(
+  recipient: PublicKey,
+  mint: PublicKey,
+  amount: BN
+): Uint8Array {
+  const buf = new Uint8Array(72);
+  buf.set(recipient.toBytes(), 0);
+  buf.set(mint.toBytes(), 32);
+  buf.set(amount.toArrayLike(Buffer, "le", 8), 64);
+  return buf;
+}
+
+// Attach an encrypted payload to a proposal
+export async function attachPayload(
+  program: Program,
+  authority: PublicKey,
+  proposalPDA: PublicKey,
+  payloadType: number,
+  encryptedData: Uint8Array,
+  payloadHash: number[]
+): Promise<string> {
+  const [payloadPDA] = findPayloadPDA(proposalPDA);
+
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .attachPayload(payloadType, Buffer.from(encryptedData), payloadHash)
+      .accounts({
+        authority,
+        proposal: proposalPDA,
+        executionPayload: payloadPDA,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc(TX_OPTS)
+  );
+}
+
+// Fetch ExecutionPayload account for a proposal (returns null if none exists)
+export async function fetchExecutionPayload(
+  program: Program,
+  proposalPDA: PublicKey
+): Promise<any | null> {
+  const [payloadPDA] = findPayloadPDA(proposalPDA);
+  try {
+    const data: any = await withRetry(() =>
+      (program.account as any).executionPayload.fetch(payloadPDA)
+    );
+    return {
+      proposal: data.proposal,
+      payloadType: data.payloadType ?? data.payload_type,
+      payloadHash: data.payloadHash ?? data.payload_hash,
+      encryptedData: data.encryptedData ?? data.encrypted_data,
+      decryptedData: data.decryptedData ?? data.decrypted_data,
+      isDecrypted: data.isDecrypted ?? data.is_decrypted ?? false,
+      executed: data.executed ?? false,
+      executionEligibleAt: (data.executionEligibleAt ?? data.execution_eligible_at)?.toNumber?.() ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Execute a passed proposal's payload (permissionless after timelock)
+export async function executeProposal(
+  program: Program,
+  executor: PublicKey,
+  proposalPDA: PublicKey,
+  treasuryTokenAccount: PublicKey,
+  recipientTokenAccount: PublicKey
+): Promise<string> {
+  const [payloadPDA] = findPayloadPDA(proposalPDA);
+
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .executeProposal()
+      .accounts({
+        executor,
+        proposal: proposalPDA,
+        executionPayload: payloadPDA,
+        treasuryTokenAccount,
+        recipientTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc(TX_OPTS)
+  );
+}
+
+// Dev mode: Reveal results with execution payload
+export async function devRevealWithExecution(
+  program: Program,
+  authority: PublicKey,
+  proposalPDA: PublicKey,
+  yesCount: number,
+  noCount: number,
+  abstainCount: number,
+  decryptedPayload: Uint8Array
+): Promise<string> {
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .devRevealWithExecution(
+        new BN(yesCount),
+        new BN(noCount),
+        new BN(abstainCount),
+        Buffer.from(decryptedPayload)
+      )
+      .accounts({
+        authority,
+        proposal: proposalPDA,
+        tally: findTallyPDA(proposalPDA)[0],
+        executionPayload: findPayloadPDA(proposalPDA)[0],
+      })
+      .rpc(TX_OPTS)
+  );
+}
+
+// Return or slash the creator's deposit (permissionless after reveal)
+export async function returnOrSlashDeposit(
+  program: Program,
+  caller: PublicKey,
+  proposalPDA: PublicKey,
+  depositTokenAccount: PublicKey,
+  creatorTokenAccount: PublicKey,
+  treasuryTokenAccount: PublicKey
+): Promise<string> {
+  const [daoConfigPDA] = findDaoConfigPDA();
+
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .returnOrSlashDeposit()
+      .accounts({
+        caller,
+        proposal: proposalPDA,
+        daoConfig: daoConfigPDA,
+        depositTokenAccount,
+        creatorTokenAccount,
+        treasuryTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc(TX_OPTS)
+  );
 }
