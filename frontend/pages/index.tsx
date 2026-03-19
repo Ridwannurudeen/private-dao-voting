@@ -32,6 +32,11 @@ import {
   getDelegationsToMe,
   castDelegatedVote,
   hasUserVoted,
+  findPayloadPDA,
+  attachPayload,
+  fetchExecutionPayload,
+  executeProposal,
+  serializeTreasuryTransfer,
 } from "../lib/contract";
 import {
   ArciumClient,
@@ -47,7 +52,7 @@ import { parseAnchorError, explorerTxUrl } from "../lib/errors";
 import { withRetry } from "../lib/retry";
 import { LockIcon, ShieldCheckIcon } from "../components/Icons";
 import { Toast, ToastData } from "../components/Toast";
-import { CreateModal } from "../components/CreateModal";
+import { CreateModal, PayloadData } from "../components/CreateModal";
 import { ProposalCard, Proposal } from "../components/ProposalCard";
 import { SkeletonCard } from "../components/SkeletonCard";
 import { StatsBar } from "../components/StatsBar";
@@ -112,6 +117,7 @@ export default function Home() {
   const [tokenBalances, setTokenBalances] = useState<Record<string, number>>({});
   const [claiming, setClaiming] = useState<Record<string, boolean>>({});
   const [cancelling, setCancelling] = useState<Record<string, boolean>>({});
+  const [executing, setExecuting] = useState<Record<string, boolean>>({});
   const [showConfetti, setShowConfetti] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [voteStep, setVoteStep] = useState<Record<string, VoteStep>>({});
@@ -357,6 +363,9 @@ export default function Home() {
             yesVotes: safeNum(a.yesVotes ?? a.yes_votes),
             noVotes: safeNum(a.noVotes ?? a.no_votes),
             abstainVotes: safeNum(a.abstainVotes ?? a.abstain_votes),
+            passed: a.passed ?? false,
+            executionDelay: safeNum(a.executionDelay ?? a.execution_delay),
+            executed: a.executed ?? false,
           });
         } catch {
           console.warn("Skipping undeserializable proposal account:", raw.pubkey.toBase58());
@@ -374,6 +383,26 @@ export default function Home() {
       // Show proposals immediately — don't wait for vote records or balances
       setProposals(mapped);
       setLoading(false);
+
+      // Fetch execution payloads in background (non-blocking)
+      Promise.all(
+        mapped.map(async (p) => {
+          try {
+            const ep = await fetchExecutionPayload(program, p.publicKey);
+            return { key: p.publicKey.toString(), payload: ep };
+          } catch {
+            return { key: p.publicKey.toString(), payload: null };
+          }
+        })
+      ).then((results) => {
+        setProposals((prev) => prev.map((p) => {
+          const match = results.find((r) => r.key === p.publicKey.toString());
+          if (match && match.payload) {
+            return { ...p, executionPayload: match.payload };
+          }
+          return p;
+        }));
+      }).catch(() => {});
 
       // Cache for instant display on next visit
       try {
@@ -497,7 +526,8 @@ export default function Home() {
     desc: string,
     duration: number,
     gateMintStr: string,
-    minBalanceStr: string
+    minBalanceStr: string,
+    payload?: PayloadData
   ) => {
     const program = getProgram();
     if (!program || !publicKey) return;
@@ -533,6 +563,24 @@ export default function Home() {
       }
 
       await withRetry(() => initTallyDirect(program, publicKey, result.proposalPDA));
+
+      // Attach payload if provided
+      if (payload && payload.payloadType > 0) {
+        const recipientPk = new PublicKey(payload.recipient);
+        const mintPk = new PublicKey(payload.payloadMint);
+        const amount = new BN(payload.payloadAmount);
+        const plaintext = serializeTreasuryTransfer(recipientPk, mintPk, amount);
+
+        // SHA-256 hash as commitment
+        const hashBuf = await crypto.subtle.digest("SHA-256", plaintext);
+        const payloadHash = Array.from(new Uint8Array(hashBuf));
+
+        // In dev mode, we pass plaintext as "encrypted" — real encryption happens via Arcium in production
+        await withRetry(() =>
+          attachPayload(program, publicKey, result.proposalPDA, payload.payloadType, plaintext, payloadHash)
+        );
+      }
+
       setToast({ message: "Proposal created with tally initialized!", type: "success", txUrl: explorerTxUrl(result.tx) });
       setModal(false);
       load();
@@ -808,6 +856,47 @@ export default function Home() {
       setToast({ message: parseAnchorError(e), type: "error" });
     }
     setCancelling((c) => ({ ...c, [key]: false }));
+  };
+
+  // Execute proposal payload (permissionless after timelock)
+  const execute = async (proposal: Proposal) => {
+    const program = getProgram();
+    if (!program || !publicKey) return;
+
+    const key = proposal.publicKey.toString();
+    setExecuting((e) => ({ ...e, [key]: true }));
+
+    try {
+      const ep = proposal.executionPayload;
+      if (!ep || !ep.isDecrypted) {
+        setToast({ message: "Payload not yet decrypted.", type: "error" });
+        setExecuting((e) => ({ ...e, [key]: false }));
+        return;
+      }
+
+      // For treasury transfer, derive token accounts from decrypted data
+      const data = ep.decryptedData ?? (ep as any).decrypted_data;
+      if (!data || data.length < 72) {
+        setToast({ message: "Invalid decrypted payload data.", type: "error" });
+        setExecuting((e) => ({ ...e, [key]: false }));
+        return;
+      }
+
+      const recipientPk = new PublicKey(Uint8Array.from(data.slice(0, 32)));
+      const mintPk = new PublicKey(Uint8Array.from(data.slice(32, 64)));
+      const treasuryAta = getAssociatedTokenAddressSync(mintPk, proposal.publicKey, true);
+      const recipientAta = getAssociatedTokenAddressSync(mintPk, recipientPk);
+
+      const txSig = await executeProposal(
+        program, publicKey, proposal.publicKey, treasuryAta, recipientAta
+      );
+      setToast({ message: "Proposal action executed!", type: "success", txUrl: explorerTxUrl(txSig) });
+      load();
+    } catch (e: any) {
+      console.error("Execute error:", e);
+      setToast({ message: parseAnchorError(e), type: "error" });
+    }
+    setExecuting((e) => ({ ...e, [key]: false }));
   };
 
   // ==================== ADMIN ACTIONS (MAINNET READINESS) ====================
@@ -1224,6 +1313,8 @@ export default function Home() {
                       setDelegatedSelected((s) => ({ ...s, [`${key}:${delegatorKey}`]: choice }))
                     }
                     onDelegatedVote={(delegator, choice) => voteAsDelegate(p, delegator, choice)}
+                    isExecuting={executing[key] || false}
+                    onExecute={() => execute(p)}
                   />
                 );
               })}

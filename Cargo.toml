@@ -2,6 +2,9 @@
 members = [
     "programs/private-dao-voting"
 ]
+exclude = [
+    "arcis/voting-circuit"
+]
 resolver = "2"
 
 [profile.release]

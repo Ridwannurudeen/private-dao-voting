@@ -59,7 +59,7 @@
 //! modified circuit, the hash mismatch causes the transaction to fail.
 
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 #[cfg(feature = "arcium")]
 use arcium_client::idl::arcium::cpi::{accounts::QueueComputation, queue_computation};
 #[cfg(feature = "arcium")]
@@ -82,6 +82,10 @@ pub const COMPUTATION_OFFSET_SEED: &[u8] = b"computation_offset";
 pub const DELEGATION_SEED: &[u8] = b"delegation";
 pub const DAO_CONFIG_SEED: &[u8] = b"dao_config";
 pub const PROGRAM_CONFIG_SEED: &[u8] = b"program_config";
+pub const PAYLOAD_SEED: &[u8] = b"payload";
+
+/// Computation definition name for the execution-aware finalize circuit
+pub const FINALIZE_EXECUTE_COMP: &str = "finalize_and_execute";
 
 /// Privacy levels
 pub const PRIVACY_FULL: u8 = 0;
@@ -249,6 +253,20 @@ fn check_not_frozen(program_config_account: &AccountInfo, program_id: &Pubkey) -
     }
 
     Ok(())
+}
+
+// ==================== PAYLOAD TYPES ====================
+
+/// Type of on-chain action attached to a proposal.
+/// The payload is encrypted end-to-end and only decrypted by the MXE if the vote passes.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace)]
+pub enum PayloadType {
+    /// No on-chain action (signal-only proposal)
+    None,
+    /// Treasury transfer: { recipient: Pubkey, mint: Pubkey, amount: u64 }
+    TreasuryTransfer,
+    /// Config change: { key: [u8;32], value: Vec<u8> }
+    ConfigChange,
 }
 
 // ==================== PROGRAM ====================
@@ -697,7 +715,7 @@ pub mod private_dao_voting {
         msg!(
             "Bytecode size: {} bytes ({} computation definitions)",
             comp_def_data.len(),
-            6 // initialize_voting, cast_vote, finalize_and_reveal, finalize_with_threshold, get_live_tally, get_vote_count
+            7 // initialize_voting, cast_vote, finalize_and_reveal, finalize_with_threshold, get_live_tally, get_vote_count, finalize_and_execute
         );
 
         // Store circuit hash in the comp def state for on-chain verification
@@ -1358,6 +1376,276 @@ pub mod private_dao_voting {
         msg!("Program unfrozen by {}", ctx.accounts.authority.key());
         Ok(())
     }
+
+    // ==================== EXECUTION ENGINE INSTRUCTIONS ====================
+
+    /// Attach an encrypted action payload to a proposal.
+    /// Must be called by the proposal authority before any votes are cast.
+    /// The payload is only decrypted if the vote passes.
+    pub fn attach_payload(
+        ctx: Context<AttachPayload>,
+        payload_type: u8,
+        encrypted_data: Vec<u8>,
+        payload_hash: [u8; 32],
+    ) -> Result<()> {
+        let proposal = &ctx.accounts.proposal;
+
+        // Must be proposal authority
+        require!(
+            ctx.accounts.authority.key() == proposal.authority,
+            VotingError::Unauthorized
+        );
+
+        // Can only attach before any votes are cast
+        require!(proposal.total_votes == 0, VotingError::AlreadyVoted);
+
+        // Proposal must be active
+        require!(proposal.is_active, VotingError::VotingClosed);
+
+        // Validate payload type (0 = None is not allowed)
+        require!(payload_type > 0 && payload_type <= 2, VotingError::InvalidPayloadType);
+
+        // Validate payload size
+        require!(
+            !encrypted_data.is_empty() && encrypted_data.len() <= 1232,
+            VotingError::PayloadTooLarge
+        );
+
+        let pt = match payload_type {
+            1 => PayloadType::TreasuryTransfer,
+            2 => PayloadType::ConfigChange,
+            _ => return Err(VotingError::InvalidPayloadType.into()),
+        };
+
+        let payload = &mut ctx.accounts.execution_payload;
+        payload.proposal = proposal.key();
+        payload.payload_type = pt;
+        payload.payload_hash = payload_hash;
+        payload.encrypted_data = encrypted_data;
+        payload.decrypted_data = Vec::new();
+        payload.is_decrypted = false;
+        payload.executed = false;
+        payload.execution_eligible_at = 0;
+        payload.bump = ctx.bumps.execution_payload;
+
+        emit!(PayloadAttached {
+            proposal: proposal.key(),
+            payload_type,
+            authority: ctx.accounts.authority.key(),
+        });
+
+        Ok(())
+    }
+
+    /// Dev mode: Reveal results with execution payload support.
+    /// Simulates MXE callback — accepts vote counts + decrypted payload directly.
+    #[cfg(feature = "dev-mode")]
+    pub fn dev_reveal_with_execution(
+        ctx: Context<DevRevealWithExecution>,
+        yes_count: u64,
+        no_count: u64,
+        abstain_count: u64,
+        decrypted_payload: Vec<u8>,
+    ) -> Result<()> {
+        let proposal = &mut ctx.accounts.proposal;
+
+        // Prevent re-reveal
+        require!(!proposal.is_revealed, VotingError::AlreadyRevealed);
+
+        // Allow permissionless reveal after voting ends, authority-only before deadline
+        let clock = Clock::get()?;
+        if clock.unix_timestamp < proposal.voting_ends_at {
+            require!(
+                ctx.accounts.authority.key() == proposal.authority,
+                VotingError::Unauthorized
+            );
+        }
+
+        // Checked arithmetic
+        let total_votes = yes_count
+            .checked_add(no_count)
+            .and_then(|x| x.checked_add(abstain_count))
+            .ok_or(VotingError::ArithmeticOverflow)?;
+
+        // Validate total against on-chain vote counter
+        require!(
+            total_votes == proposal.total_votes,
+            VotingError::VoteTallyMismatch
+        );
+
+        // Check quorum + threshold
+        let quorum_met = proposal.quorum == 0 || total_votes >= proposal.quorum;
+        let non_abstain = yes_count
+            .checked_add(no_count)
+            .ok_or(VotingError::ArithmeticOverflow)?;
+        let threshold_met = if non_abstain > 0 {
+            yes_count
+                .checked_mul(10_000)
+                .ok_or(VotingError::ArithmeticOverflow)?
+                / non_abstain
+                >= proposal.threshold_bps as u64
+        } else {
+            false
+        };
+
+        proposal.is_active = false;
+        proposal.is_revealed = true;
+        proposal.yes_votes = yes_count;
+        proposal.no_votes = no_count;
+        proposal.abstain_votes = abstain_count;
+        proposal.passed = quorum_met && threshold_met;
+
+        let winner = if yes_count > no_count {
+            1u8
+        } else if no_count > yes_count {
+            2u8
+        } else {
+            0u8
+        };
+
+        // Handle execution payload
+        let payload = &mut ctx.accounts.execution_payload;
+        if proposal.passed && !decrypted_payload.is_empty() {
+            payload.decrypted_data = decrypted_payload;
+            payload.is_decrypted = true;
+            payload.execution_eligible_at = clock.unix_timestamp + proposal.execution_delay;
+        }
+
+        emit!(PayloadDecrypted {
+            proposal: proposal.key(),
+            passed: proposal.passed,
+        });
+
+        emit!(ResultsRevealed {
+            proposal: proposal.key(),
+            yes_votes: yes_count,
+            no_votes: no_count,
+            abstain_votes: abstain_count,
+            total_votes,
+            winner,
+            passed: proposal.passed,
+        });
+
+        Ok(())
+    }
+
+    /// Execute the on-chain action payload after timelock expires.
+    /// Permissionless — anyone can trigger execution once conditions are met.
+    pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
+        let proposal = &mut ctx.accounts.proposal;
+        let payload = &mut ctx.accounts.execution_payload;
+
+        // Guards
+        require!(proposal.is_revealed, VotingError::NotYetRevealed);
+        require!(proposal.passed, VotingError::ProposalNotPassed);
+        require!(payload.is_decrypted, VotingError::PayloadNotDecrypted);
+        require!(!payload.executed, VotingError::AlreadyExecuted);
+
+        let clock = Clock::get()?;
+        require!(
+            clock.unix_timestamp >= payload.execution_eligible_at,
+            VotingError::ExecutionTimelockActive
+        );
+
+        // Execute based on payload type
+        match payload.payload_type {
+            PayloadType::TreasuryTransfer => {
+                // Deserialize: bytes 0-31 = recipient, 32-63 = mint, 64-71 = amount
+                let data = &payload.decrypted_data;
+                require!(data.len() >= 72, VotingError::PayloadNotDecrypted);
+
+                let amount = u64::from_le_bytes(
+                    data[64..72].try_into().map_err(|_| VotingError::PayloadNotDecrypted)?
+                );
+
+                // CPI: SPL token transfer from treasury (proposal PDA as authority)
+                let proposal_id_bytes = proposal.id.to_le_bytes();
+                let seeds: &[&[u8]] = &[
+                    PROPOSAL_SEED,
+                    &proposal_id_bytes,
+                    &[proposal.bump],
+                ];
+                let signer_seeds = &[seeds];
+
+                let cpi_accounts = Transfer {
+                    from: ctx.accounts.treasury_token_account.to_account_info(),
+                    to: ctx.accounts.recipient_token_account.to_account_info(),
+                    authority: proposal.to_account_info(),
+                };
+                let cpi_program = ctx.accounts.token_program.to_account_info();
+                let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
+                token::transfer(cpi_ctx, amount)?;
+            }
+            PayloadType::ConfigChange => {
+                // ConfigChange execution is a placeholder for future implementation.
+                // The decrypted data is stored on-chain for off-chain consumers to read.
+                msg!("ConfigChange payload stored on-chain for off-chain processing");
+            }
+            PayloadType::None => {
+                return Err(VotingError::NoPayloadToExecute.into());
+            }
+        }
+
+        payload.executed = true;
+        proposal.executed = true;
+
+        let pt = match payload.payload_type {
+            PayloadType::TreasuryTransfer => 1u8,
+            PayloadType::ConfigChange => 2u8,
+            PayloadType::None => 0u8,
+        };
+
+        emit!(PayloadExecuted {
+            proposal: proposal.key(),
+            payload_type: pt,
+            executor: ctx.accounts.executor.key(),
+        });
+
+        Ok(())
+    }
+
+    /// Return or slash the proposal creator's deposit after reveal.
+    /// Permissionless — anyone can trigger after results are revealed.
+    pub fn return_or_slash_deposit(ctx: Context<ReturnOrSlashDeposit>) -> Result<()> {
+        let proposal = &mut ctx.accounts.proposal;
+
+        require!(proposal.is_revealed, VotingError::NotYetRevealed);
+        require!(!proposal.deposit_returned, VotingError::DepositAlreadyProcessed);
+        require!(proposal.deposit_amount > 0, VotingError::NoPayloadToExecute);
+
+        let dao_config = &ctx.accounts.dao_config;
+
+        // Determine whether to return or slash
+        let quorum_met = proposal.quorum == 0 || proposal.total_votes >= proposal.quorum;
+        let return_deposit = quorum_met || !dao_config.slash_if_no_quorum;
+
+        let proposal_id_bytes = proposal.id.to_le_bytes();
+        let seeds: &[&[u8]] = &[
+            PROPOSAL_SEED,
+            &proposal_id_bytes,
+            &[proposal.bump],
+        ];
+        let signer_seeds = &[seeds];
+
+        let destination = if return_deposit {
+            ctx.accounts.creator_token_account.to_account_info()
+        } else {
+            ctx.accounts.treasury_token_account.to_account_info()
+        };
+
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.deposit_token_account.to_account_info(),
+            to: destination,
+            authority: proposal.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
+        token::transfer(cpi_ctx, proposal.deposit_amount)?;
+
+        proposal.deposit_returned = true;
+
+        Ok(())
+    }
 }
 
 // ==================== ACCOUNT STRUCTURES ====================
@@ -1756,6 +2044,107 @@ pub struct DevRevealResults<'info> {
 }
 
 #[derive(Accounts)]
+pub struct AttachPayload<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        constraint = authority.key() == proposal.authority @ VotingError::Unauthorized,
+        constraint = proposal.is_active @ VotingError::VotingClosed,
+    )]
+    pub proposal: Account<'info, Proposal>,
+
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + ExecutionPayload::INIT_SPACE,
+        seeds = [PAYLOAD_SEED, proposal.key().as_ref()],
+        bump
+    )]
+    pub execution_payload: Account<'info, ExecutionPayload>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[cfg(feature = "dev-mode")]
+#[derive(Accounts)]
+pub struct DevRevealWithExecution<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(mut)]
+    pub proposal: Account<'info, Proposal>,
+
+    #[account(
+        seeds = [TALLY_SEED, proposal.key().as_ref()],
+        bump,
+    )]
+    pub tally: Account<'info, Tally>,
+
+    #[account(
+        mut,
+        seeds = [PAYLOAD_SEED, proposal.key().as_ref()],
+        bump = execution_payload.bump,
+    )]
+    pub execution_payload: Account<'info, ExecutionPayload>,
+}
+
+#[derive(Accounts)]
+pub struct ExecuteProposal<'info> {
+    /// Permissionless: anyone can trigger execution after timelock
+    pub executor: Signer<'info>,
+
+    #[account(mut)]
+    pub proposal: Account<'info, Proposal>,
+
+    #[account(
+        mut,
+        seeds = [PAYLOAD_SEED, proposal.key().as_ref()],
+        bump = execution_payload.bump,
+    )]
+    pub execution_payload: Account<'info, ExecutionPayload>,
+
+    /// Treasury token account (authority = proposal PDA)
+    #[account(mut)]
+    pub treasury_token_account: Account<'info, TokenAccount>,
+
+    /// Recipient token account for the transfer
+    #[account(mut)]
+    pub recipient_token_account: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct ReturnOrSlashDeposit<'info> {
+    /// Permissionless: anyone can trigger after reveal
+    pub caller: Signer<'info>,
+
+    #[account(mut)]
+    pub proposal: Account<'info, Proposal>,
+
+    #[account(
+        seeds = [DAO_CONFIG_SEED],
+        bump = dao_config.bump,
+    )]
+    pub dao_config: Account<'info, DaoConfig>,
+
+    /// Deposit token account (authority = proposal PDA)
+    #[account(mut)]
+    pub deposit_token_account: Account<'info, TokenAccount>,
+
+    /// Creator's token account (for deposit return)
+    #[account(mut)]
+    pub creator_token_account: Account<'info, TokenAccount>,
+
+    /// Treasury token account (for deposit slash)
+    #[account(mut)]
+    pub treasury_token_account: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
 pub struct CancelProposal<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -2105,6 +2494,34 @@ pub struct CompDefState {
     pub bump: u8,
 }
 
+/// Encrypted action payload attached to a proposal.
+/// Created as a separate PDA (["payload", proposal_pubkey]) only when a proposal
+/// includes an on-chain action. Keeps the Proposal account size unchanged for
+/// signal-only proposals.
+#[account]
+#[derive(InitSpace)]
+pub struct ExecutionPayload {
+    /// The proposal this payload belongs to
+    pub proposal: Pubkey,
+    /// Type of action to execute
+    pub payload_type: PayloadType,
+    /// SHA-256 of the plaintext payload (commitment for integrity check)
+    pub payload_hash: [u8; 32],
+    /// Encrypted payload data (max 1232 bytes)
+    #[max_len(1232)]
+    pub encrypted_data: Vec<u8>,
+    /// Decrypted payload data (empty until MXE writes it after vote passes)
+    #[max_len(1232)]
+    pub decrypted_data: Vec<u8>,
+    /// Whether the MXE has decrypted and written the payload
+    pub is_decrypted: bool,
+    /// Whether the payload action has been executed on-chain
+    pub executed: bool,
+    /// Unix timestamp after which execution is allowed (reveal_time + delay)
+    pub execution_eligible_at: i64,
+    pub bump: u8,
+}
+
 // ==================== EVENTS ====================
 
 #[event]
@@ -2166,6 +2583,26 @@ pub struct AuthorityTransferred {
 pub struct ProgramFreezeToggled {
     pub authority: Pubkey,
     pub is_frozen: bool,
+}
+
+#[event]
+pub struct PayloadAttached {
+    pub proposal: Pubkey,
+    pub payload_type: u8,
+    pub authority: Pubkey,
+}
+
+#[event]
+pub struct PayloadDecrypted {
+    pub proposal: Pubkey,
+    pub passed: bool,
+}
+
+#[event]
+pub struct PayloadExecuted {
+    pub proposal: Pubkey,
+    pub payload_type: u8,
+    pub executor: Pubkey,
 }
 
 // ==================== ERRORS ====================
@@ -2238,4 +2675,20 @@ pub enum VotingError {
     CannotSelfDelegate,
     #[msg("Invalid ProgramConfig account: must be the correct PDA")]
     InvalidProgramConfig,
+    #[msg("Proposal did not pass: payload cannot execute")]
+    ProposalNotPassed,
+    #[msg("Payload action has already been executed")]
+    AlreadyExecuted,
+    #[msg("Payload has not been decrypted by MXE yet")]
+    PayloadNotDecrypted,
+    #[msg("No payload attached to this proposal")]
+    NoPayloadToExecute,
+    #[msg("Encrypted payload data exceeds maximum size of 1232 bytes")]
+    PayloadTooLarge,
+    #[msg("Cannot attach PayloadType::None — use a valid payload type")]
+    InvalidPayloadType,
+    #[msg("Execution timelock has not expired yet")]
+    ExecutionTimelockActive,
+    #[msg("Decrypted payload hash does not match the commitment")]
+    PayloadHashMismatch,
 }

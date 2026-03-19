@@ -223,6 +223,43 @@ mod circuits {
             quorum_met && threshold_met,
         )
     }
+
+    /// Finalize voting with quorum + threshold check and conditional payload reveal.
+    ///
+    /// V2 execution engine: reveals aggregates, checks governance rules, and
+    /// conditionally decrypts an encrypted action payload if the vote passes.
+    ///
+    /// ## Arguments
+    /// * `state` - Current encrypted tally
+    /// * `encrypted_payload` - Encrypted action payload (shared-key encrypted)
+    /// * `quorum` - Minimum total votes required (plaintext)
+    /// * `threshold_bps` - Required YES percentage in basis points
+    ///
+    /// ## Returns
+    /// `(yes, no, abstain, total, passed, decrypted_payload)` — the payload is
+    /// only revealed (non-zero) when `passed == true`.
+    #[instruction]
+    pub fn finalize_and_execute(
+        state: Enc<Mxe, Tally>,
+        encrypted_payload: Enc<Shared, [u8; 1232]>,
+        quorum: u64,
+        threshold_bps: u64,
+    ) -> (u64, u64, u64, u64, bool, [u8; 1232]) {
+        let tally = state.reveal();
+
+        let quorum_met = quorum == 0 || tally.total >= quorum;
+        let non_abstain = tally.yes + tally.no;
+        let threshold_met =
+            non_abstain > 0 && (tally.yes * 10_000) / non_abstain >= threshold_bps;
+        let passed = quorum_met && threshold_met;
+
+        if passed {
+            let payload = encrypted_payload.reveal();
+            (tally.yes, tally.no, tally.abstain, tally.total, true, payload)
+        } else {
+            (tally.yes, tally.no, tally.abstain, tally.total, false, [0u8; 1232])
+        }
+    }
 }
 
 // REMOVED: #[cfg(test)] mod tests { ... } — Arcis 0.9.2 does not support Rust unit tests

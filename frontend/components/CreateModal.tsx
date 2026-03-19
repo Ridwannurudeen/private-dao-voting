@@ -8,6 +8,14 @@ import { DEVELOPMENT_MODE } from "../lib/arcium";
 import { Modal } from "./Modal";
 import { ShieldCheckIcon } from "./Icons";
 
+export interface PayloadData {
+  payloadType: number; // 0=None, 1=TreasuryTransfer, 2=ConfigChange
+  recipient: string;
+  payloadMint: string;
+  payloadAmount: string;
+  executionDelay: number;
+}
+
 interface CreateModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -16,7 +24,8 @@ interface CreateModalProps {
     desc: string,
     duration: number,
     gateMint: string,
-    minBalance: string
+    minBalance: string,
+    payload?: PayloadData
   ) => void;
   loading: boolean;
 }
@@ -28,6 +37,11 @@ export function CreateModal({ isOpen, onClose, onSubmit, loading }: CreateModalP
   const [gateMint, setGateMint] = useState(DEFAULT_GATE_MINT.toString());
   const [minBalance, setMinBalance] = useState("1");
   const [showPreview, setShowPreview] = useState(false);
+  const [payloadType, setPayloadType] = useState(0);
+  const [recipient, setRecipient] = useState("");
+  const [payloadMint, setPayloadMint] = useState("");
+  const [payloadAmount, setPayloadAmount] = useState("");
+  const [executionDelay, setExecutionDelay] = useState(0);
 
   const [validationError, setValidationError] = useState("");
 
@@ -53,12 +67,41 @@ export function CreateModal({ isOpen, onClose, onSubmit, loading }: CreateModalP
       return;
     }
 
+    if (payloadType === 1) {
+      try {
+        new PublicKey(recipient.trim());
+      } catch {
+        setValidationError("Invalid recipient address for treasury transfer.");
+        return;
+      }
+      try {
+        new PublicKey(payloadMint.trim());
+      } catch {
+        setValidationError("Invalid token mint address for treasury transfer.");
+        return;
+      }
+      const amt = Number(payloadAmount.trim());
+      if (isNaN(amt) || amt <= 0) {
+        setValidationError("Transfer amount must be a positive number.");
+        return;
+      }
+    }
+
+    const payload: PayloadData | undefined = payloadType > 0 ? {
+      payloadType,
+      recipient: recipient.trim(),
+      payloadMint: payloadMint.trim(),
+      payloadAmount: payloadAmount.trim(),
+      executionDelay,
+    } : undefined;
+
     onSubmit(
       title,
       desc,
       duration,
       gateMint.trim(),
-      minBalance.trim()
+      minBalance.trim(),
+      payload
     );
   };
 
@@ -163,6 +206,81 @@ export function CreateModal({ isOpen, onClose, onSubmit, loading }: CreateModalP
               disabled={loading}
             />
           </div>
+        </div>
+
+        <div className="border-t border-white/5 pt-4">
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-3 font-medium">On-Chain Action (Optional)</p>
+
+          {/* Payload Type */}
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Action Type</label>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { label: "None", value: 0 },
+                { label: "Treasury Transfer", value: 1 },
+              ].map((pt) => (
+                <button key={pt.value} type="button" onClick={() => setPayloadType(pt.value)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${payloadType === pt.value ? "bg-gradient-to-r from-purple-600 to-cyan-500 text-white shadow-cyan-glow" : "bg-white/5 text-gray-300 hover:bg-white/10 border border-white/10"}`}>
+                  {pt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Treasury Transfer fields */}
+          {payloadType === 1 && (
+            <div className="space-y-3 bg-purple-500/5 border border-purple-500/20 rounded-xl p-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Recipient Address</label>
+                <input value={recipient} onChange={(e) => setRecipient(e.target.value)}
+                  placeholder="Solana address..."
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white caret-cyan-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/30 transition-all"
+                  disabled={loading}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Token Mint</label>
+                <input value={payloadMint} onChange={(e) => setPayloadMint(e.target.value)}
+                  placeholder="SPL token mint address..."
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white caret-cyan-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/30 transition-all"
+                  disabled={loading}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Amount</label>
+                <input value={payloadAmount} onChange={(e) => setPayloadAmount(e.target.value)}
+                  placeholder="Token amount (raw units)..."
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white caret-cyan-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/30 transition-all"
+                  disabled={loading}
+                />
+              </div>
+
+              {/* Execution Delay */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Execution Delay (Timelock)</label>
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { label: "None", seconds: 0 },
+                    { label: "1 hour", seconds: 3600 },
+                    { label: "24 hours", seconds: 86400 },
+                    { label: "3 days", seconds: 259200 },
+                    { label: "7 days", seconds: 604800 },
+                  ].map((d) => (
+                    <button key={d.seconds} type="button" onClick={() => setExecutionDelay(d.seconds)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${executionDelay === d.seconds ? "bg-purple-600 text-white" : "bg-white/5 text-gray-300 hover:bg-white/10 border border-white/10"}`}>
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3">
+                <p className="text-xs text-purple-300">
+                  This action will be encrypted. No one can see the recipient or amount until the vote passes.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {validationError && (
