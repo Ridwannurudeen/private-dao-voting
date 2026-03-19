@@ -179,18 +179,19 @@ export class ArciumClient {
       }
 
       if (this.developmentMode) {
-        // Safety: refuse to use deterministic dev key if we detect a production build
+        // Safety: refuse to use deterministic dev key on mainnet deployments
         if (
           typeof window !== "undefined" &&
+          NETWORK === "mainnet-beta" &&
           window.location.hostname !== "localhost" &&
           window.location.hostname !== "127.0.0.1"
         ) {
           throw new Error(
-            "Development mode detected in production environment. " +
+            "Development mode detected in mainnet environment. " +
               "Set NEXT_PUBLIC_MXE_PROGRAM_ID to a valid MXE program ID."
           );
         }
-        // Deterministic key for local/devnet testing only
+        // Local encryption for dev/devnet — MXE not required
         const seed = x25519.utils.randomPrivateKey();
         this.mxePublicKey = x25519.getPublicKey(seed);
       } else {

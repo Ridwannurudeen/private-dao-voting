@@ -1,5 +1,6 @@
-import { useMemo, ReactNode } from "react";
+import { useMemo, useCallback, ReactNode } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
+import { WalletError } from "@solana/wallet-adapter-base";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -19,9 +20,13 @@ export default function WalletProviderWrapper({ children }: Props) {
     [endpoint]
   );
 
+  const onError = useCallback((error: WalletError) => {
+    console.warn("Wallet error:", error.message);
+  }, []);
+
   return (
     <ConnectionProvider endpoint={endpoint} config={connectionConfig}>
-      <WalletProvider wallets={wallets} autoConnect>
+      <WalletProvider wallets={wallets} autoConnect onError={onError}>
         <WalletModalProvider>
           {children}
         </WalletModalProvider>
