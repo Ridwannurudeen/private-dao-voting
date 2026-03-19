@@ -59,11 +59,15 @@ Individual votes are _never_ decrypted. The MPC nodes compute the sum on encrypt
 
 ## Features
 
-**Privacy** -- x25519 ECDH + RescueCipher encryption before votes leave your browser. MPC tallying via Arcium's Cerberus protocol (dishonest-majority, MAC-authenticated shares). SHA-256 circuit integrity verification.
+**Privacy** -- x25519 ECDH + RescueCipher encryption before votes leave your browser. MPC tallying via Arcium's Cerberus protocol (dishonest-majority, MAC-authenticated shares). SHA-256 circuit integrity verification at build time via `build.rs`.
 
-**Governance** -- Token-gated proposals with configurable SPL balance requirements. Vote delegation with on-chain revocation. Quorum and threshold settings (basis points). Time-locked voting with live countdown.
+**Governance** -- Token-gated proposals with configurable SPL balance requirements. Vote delegation with `cast_delegated_vote` and on-chain revocation. DAO-governed proposal creation via `community_create_proposal`. Quorum and threshold settings (basis points). Time-locked voting with live countdown. Permissionless reveal after deadline.
 
-**UX** -- 4-step vote progress animation. Dark/light theme. Shareable proposal links with read-only access. CSV/JSON export. Live activity feed. Stats dashboard. MXE status monitor. Developer debug console. 5-step onboarding walkthrough. Mobile-responsive. PWA-installable. Keyboard shortcuts (`N` new, `R` refresh, `Esc` close, `D` devtools).
+**Admin & Safety** -- `ProgramConfig` PDA with freeze/unfreeze for emergency halts. Authority transfer (multisig-ready). Cancel proposals with zero votes. Input validation (title, description, discussion URL lengths). Comprehensive [security audit checklist](SECURITY.md).
+
+**Resilience** -- Offline vote queue with localStorage persistence and exponential backoff retry. MXE reconnection with automatic queue drain. Checked arithmetic throughout (no overflow).
+
+**UX** -- 4-step vote progress animation. Dark/light theme with persistence. Shareable proposal links with read-only access. CSV/JSON export (with CSV injection protection). Live activity feed. Stats dashboard. MXE status monitor. Developer debug console (`D` key). 5-step onboarding walkthrough. Mobile-responsive. PWA-installable. Keyboard shortcuts (`N` new, `R` refresh, `Esc` close, `D` devtools).
 
 ---
 
@@ -94,11 +98,11 @@ Individual votes are _never_ decrypted. The MPC nodes compute the sum on encrypt
 
 | Layer | Technology |
 |-------|-----------|
-| Smart Contract | [Anchor](https://www.anchor-lang.com/) 0.32.1 on [Solana](https://solana.com/) |
+| Smart Contract | [Anchor](https://www.anchor-lang.com/) 0.32.1 on [Solana](https://solana.com/) (2200+ lines) |
 | MPC Circuit | [Arcis](https://docs.arcium.com/) 0.1.0 + [Arcium MXE](https://arcium.com) |
 | Frontend | [Next.js](https://nextjs.org/) 14 + [React](https://react.dev/) 18 + [Tailwind CSS](https://tailwindcss.com/) 3.4 |
 | Wallet | [Solana Wallet Adapter](https://github.com/anza-xyz/wallet-adapter) (Phantom, Solflare, Backpack) |
-| Testing | [Vitest](https://vitest.dev/) (22+ unit) + [Playwright](https://playwright.dev/) (18 E2E) |
+| Testing | [Vitest](https://vitest.dev/) (135 unit) + [Playwright](https://playwright.dev/) (49 E2E) |
 | CI/CD | GitHub Actions + [Vercel](https://vercel.com/) |
 
 ---
@@ -111,10 +115,12 @@ git clone https://github.com/Ridwannurudeen/private-dao-voting.git
 cd private-dao-voting
 
 # Build & deploy the Solana program
-anchor build --features dev-mode
+anchor build -- --features dev-mode
 solana config set --url devnet
 solana airdrop 5
-anchor deploy --provider.cluster devnet
+solana program deploy target/deploy/private_dao_voting.so \
+  --program-id 71tbXM3A2j5pKHfjtu1LYgY8jfQWuoZtHecDu6F6EPJH \
+  --with-compute-unit-price 500000 --use-rpc
 
 # Run the frontend
 cd frontend
@@ -132,13 +138,17 @@ Connect your wallet and click **"Get Test Tokens"** to receive governance tokens
 ```
 private-dao-voting/
 ├── arcis/voting-circuit/          # MPC circuit (Rust) -- tally logic
-├── programs/private-dao-voting/   # Anchor program (1500+ lines)
-│   └── src/lib.rs                 #   Proposals, voting, delegation, Arcium CPI
+├── programs/private-dao-voting/   # Anchor program (2200+ lines)
+│   ├── src/lib.rs                 #   Proposals, voting, delegation, freeze, Arcium CPI
+│   └── build.rs                   #   SHA-256 circuit hash computation at compile time
 ├── frontend/
 │   ├── pages/                     # index.tsx, proposal/[id].tsx, api/faucet.ts
 │   ├── components/                # 22 components (ProposalCard, VoteProgress, etc.)
-│   └── lib/                       # arcium.ts, contract.ts, errors.ts, retry.ts
+│   ├── hooks/                     # useKeyboardShortcuts.ts
+│   ├── lib/                       # arcium.ts, contract.ts, errors.ts, retry.ts, vote-queue.ts
+│   └── e2e/                       # Playwright E2E tests (49 tests)
 ├── tests/                         # Anchor integration tests
+├── SECURITY.md                    # Security audit checklist & mainnet deployment guide
 └── .github/workflows/ci.yml      # Build, test, audit pipeline
 ```
 
@@ -150,6 +160,9 @@ private-dao-voting/
 | `tally` | `["tally", proposal]` | Encrypted vote accumulator |
 | `vote_record` | `["vote_record", proposal, voter]` | Double-vote prevention |
 | `delegation` | `["delegation", delegator]` | Vote delegation mapping |
+| `program_config` | `["program_config"]` | Freeze/unfreeze state, authority management |
+| `dao_config` | `["dao_config"]` | Community governance settings (min balance, mint) |
+| `computation_offset` | `["computation_offset"]` | MXE computation counter |
 
 ---
 
@@ -159,7 +172,7 @@ private-dao-voting/
 |--------|-----------|
 | Vote content exposure | x25519 ECDH + RescueCipher encryption |
 | Malicious MPC nodes | Cerberus protocol (N-1 dishonest majority tolerance, MAC-authenticated shares) |
-| Tampered MPC bytecode | SHA-256 circuit hash verified at `init_comp_def` |
+| Tampered MPC bytecode | SHA-256 circuit hash verified at build time via `build.rs` |
 | Double voting | VoteRecord PDA per (proposal, voter) pair |
 | Non-stakeholder voting | SPL token balance check at vote time |
 | Unauthorized result injection | Sign PDA signer constraint on MXE callbacks |
@@ -167,7 +180,15 @@ private-dao-voting/
 | Low-turnout manipulation | Configurable quorum + YES threshold (basis points) |
 | Strategic last-minute voting | Encrypted tally opaque until `finalize_and_reveal` |
 | Unauthorized delegation | On-chain delegate/revoke with deterministic PDA validation |
-| Vote tally arithmetic errors | `total_votes == yes + no + abstain` assertion |
+| Self-delegation | Explicit `delegator != delegate` check |
+| Vote tally arithmetic errors | Checked arithmetic throughout + `total_votes == yes + no + abstain` assertion |
+| Emergency exploit response | `freeze_program` / `unfreeze_program` with authority-only access |
+| CSV injection in exports | Formula character sanitization in CSV output |
+| XSS / content injection | Content-Security-Policy headers, `rehype-sanitize` for markdown |
+| CSRF on faucet API | Exact origin validation, IP + wallet rate limiting |
+| Input overflow | Title (100), description (5000), discussion URL (256) length validation |
+
+See [SECURITY.md](SECURITY.md) for the full audit checklist and responsible disclosure policy.
 
 ---
 
@@ -198,10 +219,15 @@ private-dao-voting/
 ## Testing
 
 ```bash
-npm test                          # Vitest unit tests (22+)
-npx playwright test               # E2E browser tests (18)
-anchor test --skip-local-validator # Anchor integration tests
-cd arcis/voting-circuit && cargo test  # MPC circuit tests
+cd frontend
+npm test                          # Vitest unit tests (135)
+npx playwright test               # E2E browser tests (49)
+
+# Anchor integration tests
+cd .. && anchor test --skip-local-validator
+
+# MPC circuit tests
+cd arcis/voting-circuit && cargo test
 ```
 
 CI runs on every push: build, typecheck, unit tests, E2E (with failure screenshots), security audit, and `rustfmt` check.
