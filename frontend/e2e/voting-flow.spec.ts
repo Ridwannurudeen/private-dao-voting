@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Private DAO Voting", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
   });
 
   test("landing page loads with hero content", async ({ page }) => {
@@ -41,7 +41,7 @@ test.describe("Private DAO Voting", () => {
   });
 
   test("hero landing shows key privacy features", async ({ page }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByText("Encrypted Votes")).toBeVisible({ timeout: 5000 });
     await expect(page.getByText("MPC Tallying")).toBeVisible();
     await expect(page.getByText("Verified Results")).toBeVisible();
@@ -49,7 +49,7 @@ test.describe("Private DAO Voting", () => {
   });
 
   test("proposal detail page handles missing wallet", async ({ page }) => {
-    await page.goto("/proposal/999999", { waitUntil: "networkidle" });
+    await page.goto("/proposal/999999", { waitUntil: "domcontentloaded" });
     await expect(
       page.getByText("Connect Wallet", { exact: true }).or(page.getByText("Proposal Not Found"))
     ).toBeVisible({ timeout: 5000 });
@@ -65,7 +65,7 @@ test.describe("Private DAO Voting", () => {
   });
 
   test("hero landing shows Arcium branding", async ({ page }) => {
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByText("Built on Arcium MXE")).toBeVisible({ timeout: 5000 });
     await expect(page.getByText("Vote", { exact: true })).toBeVisible();
   });
@@ -92,7 +92,7 @@ test.describe("Private DAO Voting", () => {
     );
     expect(themeAfterToggle).toBe("light");
     // Reload the page
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "domcontentloaded" });
     // Theme should persist from localStorage
     const themeAfterReload = await page.evaluate(() =>
       document.documentElement.getAttribute("data-theme")
@@ -117,7 +117,7 @@ test.describe("Private DAO Voting", () => {
   });
 
   test("proposal detail page shows connect prompt without wallet", async ({ page }) => {
-    await page.goto("/proposal/999999", { waitUntil: "networkidle" });
+    await page.goto("/proposal/999999", { waitUntil: "domcontentloaded" });
     // With an invalid proposal ID, we should see either "Proposal Not Found"
     // or, if it loads but no wallet, "Connect Wallet to Vote"
     const content = page.getByText("Proposal Not Found").or(
