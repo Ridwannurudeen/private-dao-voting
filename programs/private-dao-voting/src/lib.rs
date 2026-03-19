@@ -828,6 +828,88 @@ pub mod private_dao_voting {
         Ok(())
     }
 
+    /// Cast a vote on behalf of a delegator using their token weight.
+    /// The delegate (signer) must be the designated delegate in the Delegation account.
+    /// A VoteRecord is created for the DELEGATOR (not the delegate), preventing the
+    /// delegator from also voting directly. The delegate can still vote separately
+    /// with their own tokens.
+    #[cfg(feature = "dev-mode")]
+    pub fn cast_delegated_vote(
+        ctx: Context<CastDelegatedVote>,
+        encrypted_choice: [u8; 32],
+        nonce: [u8; 16],
+        voter_pubkey: [u8; 32],
+    ) -> Result<()> {
+        // Soft freeze check
+        check_not_frozen(&ctx.accounts.program_config, ctx.program_id)?;
+
+        // Validate proposal is still active
+        require!(
+            ctx.accounts.proposal.is_active,
+            VotingError::VotingClosed
+        );
+
+        let clock = Clock::get()?;
+        require!(
+            clock.unix_timestamp < ctx.accounts.proposal.voting_ends_at,
+            VotingError::VotingEnded
+        );
+
+        // Validate delegation: delegate must match signer, delegator must match
+        require!(
+            ctx.accounts.delegation.delegate == ctx.accounts.delegate.key(),
+            VotingError::InvalidDelegateForDelegation
+        );
+        require!(
+            ctx.accounts.delegation.delegator == ctx.accounts.delegator.key(),
+            VotingError::InvalidDelegateForDelegation
+        );
+
+        // Token gate: check the DELEGATOR's token balance against proposal requirements
+        require!(
+            ctx.accounts.delegator_token_account.owner
+                == ctx.accounts.delegator.key(),
+            VotingError::InvalidTokenAccount
+        );
+        require!(
+            ctx.accounts.delegator_token_account.mint
+                == ctx.accounts.proposal.gate_mint,
+            VotingError::InvalidTokenMint
+        );
+        require!(
+            ctx.accounts.delegator_token_account.amount
+                >= ctx.accounts.proposal.min_balance,
+            VotingError::InsufficientTokenBalance
+        );
+
+        // Record vote for the DELEGATOR (prevents delegator from voting directly too)
+        let vote_record = &mut ctx.accounts.vote_record;
+        vote_record.proposal = ctx.accounts.proposal.key();
+        vote_record.voter = ctx.accounts.delegator.key();
+        vote_record.voted_at = clock.unix_timestamp;
+        vote_record.encrypted_choice = encrypted_choice;
+        vote_record.nonce = nonce;
+        vote_record.voter_pubkey = voter_pubkey;
+        vote_record.bump = ctx.bumps.vote_record;
+
+        // Dev mode: directly update tally nonce and vote counter
+        ctx.accounts.tally.nonce = nonce;
+        ctx.accounts.proposal.total_votes = ctx
+            .accounts
+            .proposal
+            .total_votes
+            .checked_add(1)
+            .ok_or(VotingError::ArithmeticOverflow)?;
+
+        emit!(DelegatedVoteCast {
+            proposal: ctx.accounts.proposal.key(),
+            delegate: ctx.accounts.delegate.key(),
+            delegator: ctx.accounts.delegator.key(),
+        });
+
+        Ok(())
+    }
+
     /// Dev mode: Initialize tally without Arcium callback
     #[cfg(feature = "dev-mode")]
     pub fn dev_init_tally(ctx: Context<DevInitTally>) -> Result<()> {
@@ -1703,6 +1785,59 @@ pub struct RevokeDelegation<'info> {
     pub delegation: Account<'info, Delegation>,
 }
 
+#[cfg(feature = "dev-mode")]
+#[derive(Accounts)]
+pub struct CastDelegatedVote<'info> {
+    /// The delegate casting the vote on behalf of the delegator
+    #[account(mut)]
+    pub delegate: Signer<'info>,
+
+    /// CHECK: The delegator whose voting power is being used
+    pub delegator: AccountInfo<'info>,
+
+    /// The delegation record proving delegate has authority to vote for delegator
+    #[account(
+        seeds = [DELEGATION_SEED, delegator.key().as_ref()],
+        bump = delegation.bump,
+        constraint = delegation.delegate == delegate.key() @ VotingError::InvalidDelegateForDelegation,
+        constraint = delegation.delegator == delegator.key() @ VotingError::InvalidDelegateForDelegation
+    )]
+    pub delegation: Account<'info, Delegation>,
+
+    #[account(mut)]
+    pub proposal: Account<'info, Proposal>,
+
+    #[account(
+        mut,
+        seeds = [TALLY_SEED, proposal.key().as_ref()],
+        bump,
+    )]
+    pub tally: Account<'info, Tally>,
+
+    /// The delegator's token account — validated against proposal gate mint
+    #[account(
+        constraint = delegator_token_account.owner == delegator.key() @ VotingError::InvalidTokenAccount,
+        constraint = delegator_token_account.mint == proposal.gate_mint @ VotingError::InvalidTokenMint
+    )]
+    pub delegator_token_account: Account<'info, TokenAccount>,
+
+    /// Vote record keyed to the DELEGATOR so they cannot also vote directly
+    #[account(
+        init,
+        payer = delegate,
+        space = 8 + VoteRecord::INIT_SPACE,
+        seeds = [VOTE_RECORD_SEED, proposal.key().as_ref(), delegator.key().as_ref()],
+        bump
+    )]
+    pub vote_record: Account<'info, VoteRecord>,
+
+    /// CHECK: ProgramConfig PDA — optional. If it doesn't exist, freeze check is skipped.
+    pub program_config: AccountInfo<'info>,
+
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
 #[derive(Accounts)]
 pub struct InitDaoConfig<'info> {
     #[account(mut)]
@@ -1979,6 +2114,13 @@ pub struct DelegationRevoked {
 }
 
 #[event]
+pub struct DelegatedVoteCast {
+    pub proposal: Pubkey,
+    pub delegate: Pubkey,
+    pub delegator: Pubkey,
+}
+
+#[event]
 pub struct ProposalCancelled {
     pub proposal: Pubkey,
     pub authority: Pubkey,
@@ -2069,4 +2211,6 @@ pub enum VotingError {
     ProgramFrozen,
     #[msg("Invalid authority: cannot transfer to zero address")]
     InvalidAuthority,
+    #[msg("Delegate does not match delegation record")]
+    InvalidDelegateForDelegation,
 }

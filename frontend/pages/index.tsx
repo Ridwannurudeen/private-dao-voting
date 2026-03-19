@@ -28,6 +28,9 @@ import {
   communityCreateProposal,
   fetchDaoConfig,
   DaoConfigData,
+  getDelegationsToMe,
+  castDelegatedVote,
+  hasUserVoted,
 } from "../lib/contract";
 import {
   ArciumClient,
@@ -132,6 +135,15 @@ export default function Home() {
     if (typeof window === "undefined") return {};
     try { return JSON.parse(localStorage.getItem("devTallies") || "{}"); } catch { return {}; }
   });
+
+  // Delegation state: delegators who have delegated to the connected wallet
+  const [delegationsToMe, setDelegationsToMe] = useState<{ delegator: PublicKey; createdAt: number }[]>([]);
+  // Track which delegator votes have already been cast per proposal: { proposalKey: Set<delegatorKey> }
+  const [delegatorVoted, setDelegatorVoted] = useState<Record<string, Set<string>>>({});
+  // Track delegated voting in progress: { "proposalKey:delegatorKey": true }
+  const [delegatedVoting, setDelegatedVoting] = useState<Record<string, boolean>>({});
+  // Track delegated vote choice selection: { "proposalKey:delegatorKey": choice }
+  const [delegatedSelected, setDelegatedSelected] = useState<Record<string, "yes" | "no" | "abstain" | null>>({});
 
   const [hiddenProposals, setHiddenProposals] = useState<Set<string>>(() => {
     if (typeof window === 'undefined') return new Set();
@@ -374,9 +386,9 @@ export default function Home() {
         sessionStorage.setItem("cachedProposals", JSON.stringify(serializable));
       } catch {}
 
-      // Load vote records and token balances in parallel (background)
+      // Load vote records, token balances, and delegations in parallel (background)
       if (publicKey) {
-        const [voteResults] = await Promise.all([
+        const [voteResults, , delegations] = await Promise.all([
           Promise.all(
             mapped.map(async (p) => {
               try {
@@ -389,10 +401,31 @@ export default function Home() {
             })
           ),
           checkTokenBalances(mapped),
+          getDelegationsToMe(program, publicKey),
         ]);
         const v: Record<string, boolean> = {};
         for (const r of voteResults) v[r.key] = r.voted;
         setVoted(v);
+        setDelegationsToMe(delegations);
+
+        // Check which delegator votes have already been cast per proposal
+        if (delegations.length > 0) {
+          const dvoted: Record<string, Set<string>> = {};
+          await Promise.all(
+            mapped.map(async (p) => {
+              const pKey = p.publicKey.toString();
+              const votedSet = new Set<string>();
+              await Promise.all(
+                delegations.map(async (d) => {
+                  const alreadyVoted = await hasUserVoted(program, p.publicKey, d.delegator);
+                  if (alreadyVoted) votedSet.add(d.delegator.toString());
+                })
+              );
+              dvoted[pKey] = votedSet;
+            })
+          );
+          setDelegatorVoted(dvoted);
+        }
       } else {
         checkTokenBalances(mapped);
       }
@@ -434,6 +467,10 @@ export default function Home() {
       setVoted({});
       setSelected({});
       setTokenBalances({});
+      setDelegationsToMe([]);
+      setDelegatorVoted({});
+      setDelegatedVoting({});
+      setDelegatedSelected({});
       load();
       wasConnectedRef.current = true;
     } else {
@@ -445,6 +482,10 @@ export default function Home() {
       setVoted({});
       setSelected({});
       setTokenBalances({});
+      setDelegationsToMe([]);
+      setDelegatorVoted({});
+      setDelegatedVoting({});
+      setDelegatedSelected({});
       setCurrentPage(1);
     }
   }, [connected, anchorWallet, publicKey, load]);
@@ -643,6 +684,71 @@ export default function Home() {
       }
     }
     setVoting((v) => ({ ...v, [key]: false }));
+  };
+
+  // Cast a delegated vote on behalf of a delegator
+  const voteAsDelegate = async (proposal: Proposal, delegator: PublicKey, choice: "yes" | "no" | "abstain") => {
+    const program = getProgram();
+    if (!program || !publicKey) return;
+
+    const pKey = proposal.publicKey.toString();
+    const dKey = delegator.toString();
+    const compoundKey = `${pKey}:${dKey}`;
+    setDelegatedVoting((v) => ({ ...v, [compoundKey]: true }));
+
+    try {
+      let client = arciumClient;
+      if (!client) {
+        const provider = new AnchorProvider(connection, anchorWallet!, { commitment: "confirmed" });
+        client = createArciumClient(provider, CLUSTER_OFFSET);
+        await client.initialize(MXE_PROGRAM_ID);
+        setArciumClient(client);
+      }
+
+      const voteValue: 0 | 1 | 2 = choice === "yes" ? 1 : choice === "abstain" ? 2 : 0;
+      const encryptedVote = await client.encryptVote(voteValue, proposal.publicKey, delegator);
+      const secretInput = client.toSecretInput(encryptedVote);
+
+      await ensureTallyInitialized(program, publicKey, proposal.publicKey);
+
+      const txSig = await castDelegatedVote(
+        program, publicKey, delegator, proposal.publicKey, proposal.gateMint,
+        secretInput.encryptedChoice, secretInput.nonce, secretInput.voterPubkey
+      );
+
+      // Track dev tally
+      if (DEVELOPMENT_MODE || client.isFallback()) {
+        setDevTallies((prev) => {
+          const current = prev[pKey] || { yes: 0, no: 0, abstain: 0 };
+          const updated = {
+            ...prev,
+            [pKey]: {
+              yes: current.yes + (choice === "yes" ? 1 : 0),
+              no: current.no + (choice === "no" ? 1 : 0),
+              abstain: current.abstain + (choice === "abstain" ? 1 : 0),
+            },
+          };
+          localStorage.setItem("devTallies", JSON.stringify(updated));
+          return updated;
+        });
+      }
+
+      // Mark this delegator's vote as cast for this proposal
+      setDelegatorVoted((prev) => {
+        const updated = { ...prev };
+        const set = new Set(prev[pKey] || []);
+        set.add(dKey);
+        updated[pKey] = set;
+        return updated;
+      });
+      setDelegatedSelected((s) => ({ ...s, [compoundKey]: null }));
+      setToast({ message: `Delegated vote cast for ${dKey.slice(0, 4)}...${dKey.slice(-4)}!`, type: "success", txUrl: explorerTxUrl(txSig) });
+      load();
+    } catch (e: any) {
+      console.error("Delegated vote error:", e);
+      setToast({ message: parseAnchorError(e), type: "error" });
+    }
+    setDelegatedVoting((v) => ({ ...v, [compoundKey]: false }));
   };
 
   // Reveal results (permissionless after voting ends)
@@ -1080,6 +1186,11 @@ export default function Home() {
             <div id="section-proposals" className="space-y-4">
               {paginatedProposals.map((p) => {
                 const key = p.publicKey.toString();
+                // Filter delegations: only show delegators who haven't voted yet on this proposal
+                const availableDelegations = delegationsToMe.filter(
+                  (d) => !(delegatorVoted[key]?.has(d.delegator.toString()))
+                );
+                const votedDelegationCount = delegatorVoted[key]?.size ?? 0;
                 return (
                   <ProposalCard
                     key={key}
@@ -1102,6 +1213,14 @@ export default function Home() {
                     onClaimTokens={() => claimTokens(p)}
                     onToggleHide={() => toggleHideProposal(key)}
                     onVoteStepComplete={() => setVoteStep((s) => ({ ...s, [key]: "idle" }))}
+                    availableDelegations={availableDelegations}
+                    votedDelegationCount={votedDelegationCount}
+                    delegatedVoting={delegatedVoting}
+                    delegatedSelected={delegatedSelected}
+                    onDelegatedSelectChoice={(delegatorKey, choice) =>
+                      setDelegatedSelected((s) => ({ ...s, [`${key}:${delegatorKey}`]: choice }))
+                    }
+                    onDelegatedVote={(delegator, choice) => voteAsDelegate(p, delegator, choice)}
                   />
                 );
               })}

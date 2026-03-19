@@ -37,6 +37,11 @@ function formatTime(secondsRemaining: number): string {
   return seconds + "s";
 }
 
+interface DelegationInfo {
+  delegator: PublicKey;
+  createdAt: number;
+}
+
 interface ProposalCardProps {
   proposal: Proposal;
   nowTs: number;
@@ -57,6 +62,13 @@ interface ProposalCardProps {
   onClaimTokens: () => void;
   onToggleHide: () => void;
   onVoteStepComplete: () => void;
+  // Delegation props
+  availableDelegations?: DelegationInfo[];
+  votedDelegationCount?: number;
+  delegatedVoting?: Record<string, boolean>;
+  delegatedSelected?: Record<string, "yes" | "no" | "abstain" | null>;
+  onDelegatedSelectChoice?: (delegatorKey: string, choice: "yes" | "no" | "abstain") => void;
+  onDelegatedVote?: (delegator: PublicKey, choice: "yes" | "no" | "abstain") => void;
 }
 
 export function ProposalCard({
@@ -79,6 +91,12 @@ export function ProposalCard({
   onClaimTokens,
   onToggleHide,
   onVoteStepComplete,
+  availableDelegations = [],
+  votedDelegationCount = 0,
+  delegatedVoting = {},
+  delegatedSelected = {},
+  onDelegatedSelectChoice,
+  onDelegatedVote,
 }: ProposalCardProps) {
   // Real-time countdown
   const [liveRemaining, setLiveRemaining] = useState(Number(p.votingEndsAt) - nowTs);
@@ -219,6 +237,90 @@ export function ProposalCard({
         <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-4 flex items-center justify-center gap-2">
           <ShieldCheckIcon className="w-5 h-5 text-cyan-400" />
           <span className="text-cyan-400 text-sm sm:text-base">Your encrypted vote is sealed on-chain</span>
+        </div>
+      )}
+
+      {/* Delegated voting section */}
+      {active && (availableDelegations.length > 0 || votedDelegationCount > 0) && onDelegatedVote && onDelegatedSelectChoice && (
+        <div className="mt-4 pt-3 border-t border-white/10 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              <span className="text-sm font-medium text-purple-400">
+                Delegated Votes
+              </span>
+            </div>
+            <span className="text-xs text-gray-500">
+              {availableDelegations.length} available{votedDelegationCount > 0 ? `, ${votedDelegationCount} cast` : ""}
+            </span>
+          </div>
+
+          {availableDelegations.map((d) => {
+            const dKey = d.delegator.toString();
+            const compoundKey = `${p.publicKey.toString()}:${dKey}`;
+            const isVotingDelegated = delegatedVoting[compoundKey] || false;
+            const selectedDelegated = delegatedSelected[compoundKey] || null;
+            const shortAddr = `${dKey.slice(0, 4)}...${dKey.slice(-4)}`;
+
+            return (
+              <div key={dKey} className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">
+                    Vote for <span className="text-purple-300 font-mono">{shortAddr}</span>
+                  </span>
+                </div>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => onDelegatedSelectChoice(dKey, "yes")}
+                    disabled={isVotingDelegated}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      selectedDelegated === "yes"
+                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500"
+                        : "bg-white/5 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10"
+                    }`}
+                  >
+                    YES
+                  </button>
+                  <button
+                    onClick={() => onDelegatedSelectChoice(dKey, "no")}
+                    disabled={isVotingDelegated}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      selectedDelegated === "no"
+                        ? "bg-red-500/20 text-red-400 border border-red-500"
+                        : "bg-white/5 text-red-400 border border-red-500/30 hover:bg-red-500/10"
+                    }`}
+                  >
+                    NO
+                  </button>
+                  <button
+                    onClick={() => onDelegatedSelectChoice(dKey, "abstain")}
+                    disabled={isVotingDelegated}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      selectedDelegated === "abstain"
+                        ? "bg-slate-500/20 text-slate-300 border border-slate-400"
+                        : "bg-white/5 text-slate-400 border border-slate-500/30 hover:bg-slate-500/10"
+                    }`}
+                  >
+                    ABSTAIN
+                  </button>
+                </div>
+                {selectedDelegated && (
+                  <button
+                    onClick={() => onDelegatedVote(d.delegator, selectedDelegated)}
+                    disabled={isVotingDelegated}
+                    className="w-full py-2 bg-gradient-to-r from-purple-600 to-purple-500 rounded-lg text-xs font-semibold disabled:opacity-50 hover:shadow-lg hover:shadow-purple-500/20 transition-all border border-purple-500/20 text-white"
+                  >
+                    {isVotingDelegated ? "Submitting..." : `Vote as Delegate for ${shortAddr}`}
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

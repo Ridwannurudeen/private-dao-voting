@@ -10,6 +10,7 @@ const ERROR_MAP: Record<string, string> = {
   InsufficientBalance: "You don't have enough gate tokens to vote on this proposal.",
   InsufficientTokenBalance: "You need more governance tokens to vote.",
   InvalidDelegationAccount: "There's an issue with your delegation status. Please check your delegation settings.",
+  InvalidDelegateForDelegation: "You are not authorized to vote on behalf of this delegator.",
   ArithmeticOverflow: "Vote tally arithmetic overflow. Please contact the DAO administrator.",
   VoteTallyMismatch: "Vote tally mismatch detected. The sum of votes doesn't match the total.",
   CannotCancelAfterVotes: "This proposal cannot be cancelled because votes have been cast and the voting period has ended.",
