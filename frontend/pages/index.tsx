@@ -444,7 +444,7 @@ export default function Home() {
       const res = await fetch("/api/faucet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress: publicKey.toBase58(), gateMint: proposal.gateMint.toBase58() }),
+        body: JSON.stringify({ walletAddress: publicKey.toBase58() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Faucet request failed");
@@ -878,6 +878,7 @@ export default function Home() {
     onClose: () => setModal(false),
     onRefresh: () => { if (connected) load(); },
     onNewProposal: () => { if (connected) setModal(true); },
+    onDevConsole: () => { if (connected) setDevConsoleOpen((v) => !v); },
   }), [connected, load]);
   useKeyboardShortcuts(shortcutHandlers);
 
@@ -1198,7 +1199,7 @@ export default function Home() {
                     nowTs={nowTs}
                     publicKey={publicKey}
                     hasVoted={voted[key] || false}
-                    tokenBalance={tokenBalances[key] ?? 0}
+                    tokenBalance={tokenBalances[key] ?? -1}
                     selectedChoice={selected[key] || null}
                     isVoting={voting[key] || false}
                     isRevealing={revealing[key] || false}

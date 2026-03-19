@@ -64,7 +64,7 @@ test.describe("Private DAO Voting", () => {
     expect(manifest.icons.length).toBeGreaterThan(0);
   });
 
-test("hero landing shows Arcium branding", async ({ page }) => {
+  test("hero landing shows Arcium branding", async ({ page }) => {
     await page.goto("/", { waitUntil: "networkidle" });
     await expect(page.getByText("Built on Arcium MXE")).toBeVisible({ timeout: 5000 });
     await expect(page.getByText("Vote", { exact: true })).toBeVisible();
@@ -107,13 +107,13 @@ test("hero landing shows Arcium branding", async ({ page }) => {
     // StatsBar only renders in the dashboard layout when wallet is connected
     // and proposals exist. Without a wallet, we verify the landing page
     // shows the equivalent feature metrics (the three feature cards).
-    const featureCards = page.locator(".glass-card-elevated");
-    const count = await featureCards.count();
-    expect(count).toBeGreaterThanOrEqual(3);
-    // Each feature card has a heading
+    // Wait for React hydration before querying class-based selectors
     await expect(page.getByText("Encrypted Votes")).toBeVisible({ timeout: 5000 });
     await expect(page.getByText("MPC Tallying")).toBeVisible({ timeout: 5000 });
     await expect(page.getByText("Verified Results")).toBeVisible({ timeout: 5000 });
+    const featureCards = page.locator(".glass-card-elevated");
+    const count = await featureCards.count();
+    expect(count).toBeGreaterThanOrEqual(3);
   });
 
   test("proposal detail page shows connect prompt without wallet", async ({ page }) => {
@@ -188,13 +188,15 @@ test("hero landing shows Arcium branding", async ({ page }) => {
   });
 
   test("wallet adapter button is interactive", async ({ page }) => {
+    // Wait for React hydration before querying class-based selectors
+    await expect(page.getByText("Privately")).toBeVisible({ timeout: 5000 });
     // Find wallet adapter buttons on the page
     const walletButtons = page.locator(".wallet-adapter-button");
+    await expect(walletButtons.first()).toBeVisible({ timeout: 5000 });
     const count = await walletButtons.count();
     expect(count).toBeGreaterThan(0);
     // The first button should be clickable (it opens the wallet modal)
     const firstButton = walletButtons.first();
-    await expect(firstButton).toBeVisible({ timeout: 5000 });
     await expect(firstButton).toBeEnabled();
     // Click the wallet button — it should open a modal or dropdown
     await firstButton.click();

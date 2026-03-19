@@ -367,6 +367,132 @@ describe("VoteQueue", () => {
     });
   });
 
+  // ---------- onChange with processQueue ----------
+
+  describe("onChange with processQueue", () => {
+    it("notifies after successful processQueue", async () => {
+      queue.enqueue(makeVote());
+      const cb = vi.fn();
+      queue.onChange(cb);
+      await queue.processQueue(vi.fn().mockResolvedValue(undefined));
+      // Should be called with 0 (vote removed)
+      expect(cb).toHaveBeenCalledWith(0);
+    });
+
+    it("notifies after failed processQueue", async () => {
+      queue.enqueue(makeVote());
+      const cb = vi.fn();
+      queue.onChange(cb);
+      await queue.processQueue(vi.fn().mockRejectedValue(new Error("fail")));
+      // Vote stays, so callback called with 1
+      expect(cb).toHaveBeenCalledWith(1);
+    });
+
+    it("supports multiple subscribers", () => {
+      const cb1 = vi.fn();
+      const cb2 = vi.fn();
+      queue.onChange(cb1);
+      queue.onChange(cb2);
+      queue.enqueue(makeVote());
+      expect(cb1).toHaveBeenCalledWith(1);
+      expect(cb2).toHaveBeenCalledWith(1);
+    });
+
+    it("notifies on clearExpiredVotes when votes are removed", () => {
+      queue.enqueue(makeVote());
+      // Backdate the vote
+      const items = JSON.parse(localStorage.getItem("mxe_vote_queue")!);
+      items[0].timestamp = Date.now() - 48 * 60 * 60 * 1000;
+      localStorage.setItem("mxe_vote_queue", JSON.stringify(items));
+
+      const freshQueue = new VoteQueue();
+      const cb = vi.fn();
+      freshQueue.onChange(cb);
+      freshQueue.clearExpiredVotes(24 * 60 * 60 * 1000);
+      expect(cb).toHaveBeenCalledWith(0);
+    });
+
+    it("does not notify on clearExpiredVotes when nothing is removed", () => {
+      queue.enqueue(makeVote());
+      const cb = vi.fn();
+      queue.onChange(cb);
+      queue.clearExpiredVotes(24 * 60 * 60 * 1000);
+      expect(cb).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---------- enqueue edge cases ----------
+
+  describe("enqueue edge cases", () => {
+    it("preserves all vote data fields", () => {
+      const input = makeVote({
+        proposalPDA: "testPDA",
+        encryptedChoice: [10, 20, 30],
+        nonce: [40, 50, 60],
+        voterPubkey: [70, 80, 90],
+        walletPubkey: "walletTest123",
+        gateMint: "mintTest456",
+        choice: "abstain",
+      });
+      const entry = queue.enqueue(input);
+      expect(entry.proposalPDA).toBe("testPDA");
+      expect(entry.encryptedChoice).toEqual([10, 20, 30]);
+      expect(entry.nonce).toEqual([40, 50, 60]);
+      expect(entry.voterPubkey).toEqual([70, 80, 90]);
+      expect(entry.walletPubkey).toBe("walletTest123");
+      expect(entry.gateMint).toBe("mintTest456");
+      expect(entry.choice).toBe("abstain");
+    });
+
+    it("timestamp is close to current time", () => {
+      const before = Date.now();
+      const entry = queue.enqueue(makeVote());
+      const after = Date.now();
+      expect(entry.timestamp).toBeGreaterThanOrEqual(before);
+      expect(entry.timestamp).toBeLessThanOrEqual(after);
+    });
+  });
+
+  // ---------- getNextBackoffMs edge cases ----------
+
+  describe("getNextBackoffMs edge cases", () => {
+    it("returns first backoff value when queue is empty", () => {
+      expect(queue.getNextBackoffMs()).toBe(30_000);
+    });
+
+    it("uses minimum retryCount across multiple votes", async () => {
+      queue.enqueue(makeVote({ proposalPDA: "p1" }));
+      queue.enqueue(makeVote({ proposalPDA: "p2" }));
+
+      // Fail only p1 once — p2 stays at retryCount 0
+      // processQueue fails both, so both get retryCount 1
+      await queue.processQueue(vi.fn().mockRejectedValue(new Error("fail")));
+      // Both at retryCount=1, min=1 => 60_000
+      expect(queue.getNextBackoffMs()).toBe(60_000);
+
+      // Enqueue a fresh vote (retryCount=0) — min goes back to 0
+      queue.enqueue(makeVote({ proposalPDA: "p3" }));
+      expect(queue.getNextBackoffMs()).toBe(30_000);
+    });
+  });
+
+  // ---------- clear edge cases ----------
+
+  describe("clear edge cases", () => {
+    it("clearing empty queue is a no-op", () => {
+      queue.clear();
+      expect(queue.getQueueLength()).toBe(0);
+    });
+
+    it("queue is usable after clear", () => {
+      queue.enqueue(makeVote());
+      queue.clear();
+      queue.enqueue(makeVote({ proposalPDA: "afterClear" }));
+      expect(queue.getQueueLength()).toBe(1);
+      expect(queue.getQueue()[0].proposalPDA).toBe("afterClear");
+    });
+  });
+
   // ---------- singleton ----------
 
   describe("singleton", () => {

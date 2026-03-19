@@ -36,13 +36,6 @@ function isRateLimited(key: string): boolean {
   return false;
 }
 
-function recordClaim(key: string): void {
-  const now = Date.now();
-  const claims = claimLog.get(key) || [];
-  claims.push(now);
-  claimLog.set(key, claims);
-}
-
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -51,9 +44,25 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const origin = req.headers.origin || req.headers.referer || "";
+  const rawOrigin = req.headers.origin || "";
+  // Parse origin to prevent bypass via subdomain matching (e.g., evil.vercel.app)
   const allowedOrigins = ["http://localhost:3000", "https://privatedao-arcium.vercel.app"];
-  if (!allowedOrigins.some(o => origin.startsWith(o))) {
+  let originAllowed = false;
+  if (rawOrigin) {
+    try {
+      const parsed = new URL(rawOrigin);
+      const normalizedOrigin = parsed.origin; // scheme + host + port
+      originAllowed = allowedOrigins.includes(normalizedOrigin);
+    } catch {
+      originAllowed = false;
+    }
+  } else {
+    // Allow same-origin requests (no Origin header = not a cross-origin request)
+    // Referer is not reliable for CORS checks; only allow when Origin is present
+    // or when there's no Origin header at all (same-origin non-CORS request)
+    originAllowed = true;
+  }
+  if (!originAllowed) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -72,7 +81,8 @@ export default async function handler(
     return res.status(429).json({ error: "Rate limited. Max 3 claims per 10 minutes." });
   }
 
-  recordClaim(`ip:${clientIP}`);
+  // Note: recordClaim is NOT called here because isRateLimited() already
+  // records the timestamp when the request is allowed through (line 33-34).
 
   const authoritySecret = process.env.GATE_MINT_AUTHORITY;
   if (!authoritySecret) {

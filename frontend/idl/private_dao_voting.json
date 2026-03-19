@@ -490,6 +490,9 @@
           ]
         },
         {
+          "name": "program_config"
+        },
+        {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
@@ -2439,6 +2442,16 @@
       "code": 6029,
       "name": "InvalidDelegateForDelegation",
       "msg": "Delegate does not match delegation record"
+    },
+    {
+      "code": 6030,
+      "name": "InvalidDiscussionUrlLength",
+      "msg": "Discussion URL must be at most 256 characters"
+    },
+    {
+      "code": 6031,
+      "name": "CannotSelfDelegate",
+      "msg": "Cannot delegate to yourself"
     }
   ],
   "types": [

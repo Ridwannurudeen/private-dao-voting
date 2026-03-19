@@ -124,9 +124,10 @@ export function Sidebar({
         </div>
 
         {/* Keyboard shortcuts */}
-        <div className="hidden lg:flex items-center gap-2 text-[9px] text-gray-600 px-1">
+        <div className="hidden lg:flex items-center gap-2 text-[9px] text-gray-600 px-1 flex-wrap">
           <span><kbd className="px-1 py-0.5 bg-white/5 border border-white/10 rounded text-gray-500">N</kbd> New</span>
           <span><kbd className="px-1 py-0.5 bg-white/5 border border-white/10 rounded text-gray-500">R</kbd> Refresh</span>
+          <span><kbd className="px-1 py-0.5 bg-white/5 border border-white/10 rounded text-gray-500">D</kbd> Debug</span>
           <span><kbd className="px-1 py-0.5 bg-white/5 border border-white/10 rounded text-gray-500">Esc</kbd> Close</span>
         </div>
       </div>

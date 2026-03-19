@@ -14,6 +14,20 @@ function downloadFile(filename: string, content: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Sanitize a string for safe CSV output.
+ * - Escapes embedded double quotes by doubling them.
+ * - Prefixes formula trigger characters (=, +, -, @, \t, \r) with a single
+ *   quote to prevent CSV injection when opened in Excel/Google Sheets.
+ */
+function sanitizeCsvCell(value: string): string {
+  let safe = value.replace(/"/g, '""');
+  if (/^[=+\-@\t\r]/.test(safe)) {
+    safe = "'" + safe;
+  }
+  return safe;
+}
+
 export function ExportResults({ proposal: p }: ExportResultsProps) {
   const total = p.totalVotes || 0;
   const yes = p.yesVotes || 0;
@@ -47,7 +61,7 @@ export function ExportResults({ proposal: p }: ExportResultsProps) {
       ["Total Votes", String(total)],
       ["Voting Ended", new Date(Number(p.votingEndsAt) * 1000).toISOString()],
     ];
-    const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+    const csv = rows.map((r) => r.map((c) => `"${sanitizeCsvCell(c)}"`).join(",")).join("\n");
     downloadFile(`proposal-${p.id.toString()}.csv`, csv, "text/csv");
   };
 
