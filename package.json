@@ -5,10 +5,12 @@
   "license": "MIT",
   "scripts": {
     "build": "anchor build",
-    "test": "anchor test",
-    "test:unit": "ts-mocha -p ./tsconfig.json mock-arcium.test.ts --timeout 30000",
+    "test": "ts-mocha -p ./tsconfig.json -t 30000 mock-arcium.test.ts",
+    "test:unit": "ts-mocha -p ./tsconfig.json -t 30000 mock-arcium.test.ts",
+    "test:integration": "ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts",
+    "test:anchor": "anchor test",
     "test:e2e": "anchor test --skip-local-validator",
-    "test:all": "npm run test:unit && npm run test:e2e",
+    "test:all": "npm run test:unit && npm run test:integration",
     "test:watch": "ts-mocha -p ./tsconfig.json tests/**/*.test.ts --watch --timeout 30000",
     "lint": "eslint . --ext .ts",
     "clean": "rmdir /s /q node_modules target .anchor 2>nul || true"
