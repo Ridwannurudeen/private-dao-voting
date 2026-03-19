@@ -204,6 +204,61 @@ export async function getDelegation(
   }
 }
 
+// Fetch all Delegation accounts where delegate == myKey.
+// Returns the list of delegators who have delegated to the connected wallet.
+export async function getDelegationsToMe(
+  program: Program,
+  delegate: PublicKey
+): Promise<{ delegator: PublicKey; createdAt: number }[]> {
+  try {
+    const all: any[] = await withRetry(() => (program.account as any).delegation.all());
+    return all
+      .filter((d: any) => d.account.delegate.equals(delegate))
+      .map((d: any) => ({
+        delegator: d.account.delegator as PublicKey,
+        createdAt: d.account.createdAt?.toNumber?.() ?? 0,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+// Dev mode: Cast a delegated vote on behalf of a delegator
+export async function castDelegatedVote(
+  program: Program,
+  delegate: PublicKey,       // the signer (delegate)
+  delegator: PublicKey,      // the person who delegated
+  proposalPDA: PublicKey,
+  gateMint: PublicKey,
+  encryptedChoice: number[],
+  nonce: number[],
+  voterPubkey: number[],
+): Promise<string> {
+  const [tallyPDA] = findTallyPDA(proposalPDA);
+  const [voteRecordPDA] = findVoteRecordPDA(proposalPDA, delegator);
+  const delegatorTokenAccount = getAssociatedTokenAddressSync(gateMint, delegator);
+  const [delegationPDA] = findDelegationPDA(delegator);
+  const [programConfigPDA] = findProgramConfigPDA();
+
+  return await rpcWithErrorFix(() =>
+    program.methods
+      .castDelegatedVote(encryptedChoice, nonce, voterPubkey)
+      .accounts({
+        delegate,
+        delegator,
+        delegation: delegationPDA,
+        proposal: proposalPDA,
+        tally: tallyPDA,
+        delegatorTokenAccount,
+        voteRecord: voteRecordPDA,
+        programConfig: programConfigPDA,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc(TX_OPTS)
+  );
+}
+
 // Dev mode: Initialize tally for a proposal
 export async function devInitTally(
   program: Program,
