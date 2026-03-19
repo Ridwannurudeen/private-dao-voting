@@ -264,7 +264,7 @@ export default function ProposalDetail() {
         );
       } else {
         const computationOffset = deriveComputationOffset(p.publicKey, Date.now());
-        const arciumAccounts = client.getArciumAccounts("vote", computationOffset);
+        const arciumAccounts = client.getArciumAccounts("cast_vote", computationOffset);
         txSig = await castVoteWithArcium(
           program, publicKey, p.publicKey, p.gateMint,
           secretInput.encryptedChoice, secretInput.nonce, secretInput.voterPubkey,
@@ -349,7 +349,8 @@ export default function ProposalDetail() {
   const isEnded = liveRemaining <= 0;
   const isUrgent = active && liveRemaining < 300;
   const isAuthority = publicKey && proposal?.authority?.equals?.(publicKey);
-  const canReveal = isAuthority && isEnded && proposal && !proposal.isRevealed && proposal.isActive;
+  // Permissionless reveal: anyone can reveal after deadline; only authority before
+  const canReveal = isEnded && proposal && !proposal.isRevealed && proposal.isActive;
 
   const yes = proposal ? (typeof proposal.yesVotes === "number" ? proposal.yesVotes : 0) : 0;
   const no = proposal ? (typeof proposal.noVotes === "number" ? proposal.noVotes : 0) : 0;

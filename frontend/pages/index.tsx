@@ -13,6 +13,7 @@ import {
   findVoteRecordPDA,
   devCreateProposal,
   devInitTally,
+  initTallyDirect,
   devCastVote,
   castVoteWithArcium,
   revealResultsWithArcium,
@@ -519,9 +520,10 @@ export default function Home() {
 
       if (daoConfig && !DEVELOPMENT_MODE) {
         // Community mode: anyone with sufficient governance tokens can create
+        const mxeProgramId = MXE_PROGRAM_ID ? new PublicKey(MXE_PROGRAM_ID) : PublicKey.default;
         result = await withRetry(() => communityCreateProposal(
           program, publicKey, title, desc, duration, gateMint, minBalance,
-          daoConfig.governanceMint
+          daoConfig.governanceMint, mxeProgramId
         ));
       } else {
         // Dev/fallback mode: authority-only proposal creation
@@ -530,7 +532,7 @@ export default function Home() {
         ));
       }
 
-      await withRetry(() => devInitTally(program, publicKey, result.proposalPDA));
+      await withRetry(() => initTallyDirect(program, publicKey, result.proposalPDA));
       setToast({ message: "Proposal created with tally initialized!", type: "success", txUrl: explorerTxUrl(result.tx) });
       setModal(false);
       load();

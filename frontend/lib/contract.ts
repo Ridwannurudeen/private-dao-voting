@@ -265,13 +265,22 @@ export async function devInitTally(
   authority: PublicKey,
   proposalPDA: PublicKey
 ): Promise<string> {
+  return initTallyDirect(program, authority, proposalPDA);
+}
+
+// Initialize tally directly (available in all builds, not dev-mode gated)
+export async function initTallyDirect(
+  program: Program,
+  payer: PublicKey,
+  proposalPDA: PublicKey
+): Promise<string> {
   const [tallyPDA] = findTallyPDA(proposalPDA);
 
   return await rpcWithErrorFix(() =>
     program.methods
-      .devInitTally()
+      .initTallyDirect()
       .accounts({
-        authority,
+        authority: payer,
         proposal: proposalPDA,
         tally: tallyPDA,
         systemProgram: SystemProgram.programId,
@@ -355,6 +364,7 @@ export async function castVoteWithArcium(
   const [voteRecordPDA] = findVoteRecordPDA(proposalPDA, voter);
   const voterTokenAccount = getAssociatedTokenAddressSync(gateMint, voter);
   const [computationOffsetPDA] = findComputationOffsetPDA();
+  const [programConfigPDA] = findProgramConfigPDA();
 
   return await rpcWithErrorFix(() =>
     program.methods
@@ -377,6 +387,7 @@ export async function castVoteWithArcium(
         compDefAccount: arciumAccounts.compDefAccount,
         poolAccount: arciumAccounts.poolAccount,
         clockAccount: arciumAccounts.clockAccount,
+        programConfig: programConfigPDA,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })
@@ -738,6 +749,7 @@ export async function communityCreateProposal(
   gateMint: PublicKey,
   minBalance: BN,
   governanceMint: PublicKey,
+  mxeProgramId: PublicKey = PublicKey.default,
   quorum: BN = new BN(0),
   thresholdBps: number = 5001,
   privacyLevel: number = 0,
@@ -766,7 +778,8 @@ export async function communityCreateProposal(
         thresholdBps,
         privacyLevel,
         discussionUrl,
-        new BN(executionDelay)
+        new BN(executionDelay),
+        mxeProgramId
       )
       .accounts({
         proposer,

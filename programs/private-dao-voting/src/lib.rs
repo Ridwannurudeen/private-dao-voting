@@ -207,24 +207,20 @@ fn check_no_active_delegation(
 
 /// Soft freeze check: if ProgramConfig PDA exists and is_frozen is true, return error.
 /// If the ProgramConfig account doesn't exist (no data, wrong owner, or null), assume
-/// the program is NOT frozen — maintaining backward compatibility.
+/// the program is NOT frozen.
 ///
-/// NOTE: Callers pass this as an unconstrained `AccountInfo`. If a garbage account is
-/// provided, the key won't match the expected PDA and the check is skipped (returns Ok).
-/// This is intentional for backward compatibility — programs deployed before
-/// `ProgramConfig` was introduced will pass any account here and still function.
-/// The real protection is that once `init_program_config` has been called, the correct
-/// PDA exists on-chain and legitimate clients will always pass it. A malicious caller
-/// could bypass the freeze by passing a garbage account, but the freeze is an
-/// administrative safeguard (not a security boundary) and the on-chain PDA derivation
-/// ensures only the correct account can match.
+/// The `program_config` account MUST be the correct PDA derived from
+/// `["program_config"]`. All instruction structs enforce this via
+/// `seeds = [PROGRAM_CONFIG_SEED]` constraint. If ProgramConfig has not
+/// been initialized yet (account has no data), the check is skipped
+/// to allow bootstrapping.
 fn check_not_frozen(program_config_account: &AccountInfo, program_id: &Pubkey) -> Result<()> {
+    // Verify the account is the correct PDA — prevents freeze bypass via garbage accounts
     let (expected_pda, _) = Pubkey::find_program_address(&[PROGRAM_CONFIG_SEED], program_id);
-
-    // If the account key doesn't match the expected PDA, skip the check (backward compat)
-    if program_config_account.key() != expected_pda {
-        return Ok(());
-    }
+    require!(
+        program_config_account.key() == expected_pda,
+        VotingError::InvalidProgramConfig
+    );
 
     // If the account has no data or isn't owned by this program, config doesn't exist yet
     if program_config_account.data_len() == 0 || program_config_account.owner != program_id {
@@ -516,25 +512,23 @@ pub mod private_dao_voting {
         Ok(())
     }
 
-    /// Reveal the final vote results
+    /// Reveal the final vote results.
+    /// After the voting deadline, anyone can trigger reveal (permissionless).
+    /// Before the deadline, only the proposal authority can reveal early.
     pub fn reveal_results(ctx: Context<RevealResults>) -> Result<()> {
         let proposal = &ctx.accounts.proposal;
-
-        // Only authority can reveal
-        require!(
-            ctx.accounts.authority.key() == proposal.authority,
-            VotingError::Unauthorized
-        );
 
         // Prevent re-reveal
         require!(!proposal.is_revealed, VotingError::AlreadyRevealed);
 
-        // Validate voting has ended
+        // Permissionless after deadline, authority-only before
         let clock = Clock::get()?;
-        require!(
-            clock.unix_timestamp >= proposal.voting_ends_at,
-            VotingError::VotingNotEnded
-        );
+        if clock.unix_timestamp < proposal.voting_ends_at {
+            require!(
+                ctx.accounts.authority.key() == proposal.authority,
+                VotingError::Unauthorized
+            );
+        }
 
         // Queue reveal computation
         let cpi_accounts = QueueComputation {
@@ -606,15 +600,10 @@ pub mod private_dao_voting {
             VotingError::VoteTallyMismatch
         );
 
-        // Enforce quorum if set
-        if proposal.quorum > 0 {
-            require!(
-                total_votes >= proposal.quorum,
-                VotingError::QuorumNotReached
-            );
-        }
+        // Check quorum — if not met, proposal still reveals but with passed=false
+        let quorum_met = proposal.quorum == 0 || total_votes >= proposal.quorum;
 
-        // Check threshold for production path too
+        // Check threshold: yes_votes must be >= threshold_bps of non-abstain votes
         let non_abstain = yes_count
             .checked_add(no_count)
             .ok_or(VotingError::ArithmeticOverflow)?;
@@ -627,8 +616,6 @@ pub mod private_dao_voting {
         } else {
             false
         };
-
-        let quorum_met = proposal.quorum == 0 || total_votes >= proposal.quorum;
 
         proposal.is_active = false;
         proposal.is_revealed = true;
@@ -914,9 +901,9 @@ pub mod private_dao_voting {
         Ok(())
     }
 
-    /// Dev mode: Initialize tally without Arcium callback
-    #[cfg(feature = "dev-mode")]
-    pub fn dev_init_tally(ctx: Context<DevInitTally>) -> Result<()> {
+    /// Initialize tally directly (without Arcium CPI callback).
+    /// Used by community proposals and dev mode. Available in all builds.
+    pub fn init_tally_direct(ctx: Context<DevInitTally>) -> Result<()> {
         let tally = &mut ctx.accounts.tally;
         tally.proposal = ctx.accounts.proposal.key();
         tally.encrypted_data = [0u8; 128];
@@ -1031,13 +1018,8 @@ pub mod private_dao_voting {
             VotingError::VoteTallyMismatch
         );
 
-        // Check quorum if set
-        if proposal.quorum > 0 {
-            require!(
-                total_votes >= proposal.quorum,
-                VotingError::QuorumNotReached
-            );
-        }
+        // Check quorum — if not met, proposal still reveals but with passed=false
+        let quorum_met = proposal.quorum == 0 || total_votes >= proposal.quorum;
 
         // Check threshold: yes_votes must be >= threshold_bps of non-abstain votes
         let non_abstain = yes_count
@@ -1052,8 +1034,6 @@ pub mod private_dao_voting {
         } else {
             false
         };
-
-        let quorum_met = proposal.quorum == 0 || total_votes >= proposal.quorum;
 
         proposal.is_active = false;
         proposal.is_revealed = true;
@@ -1188,6 +1168,7 @@ pub mod private_dao_voting {
         privacy_level: u8,
         discussion_url: String,
         execution_delay: i64,
+        mxe_program_id: Pubkey,
     ) -> Result<()> {
         // Freeze check
         check_not_frozen(&ctx.accounts.program_config, ctx.program_id)?;
@@ -1249,7 +1230,7 @@ pub mod private_dao_voting {
         proposal.total_votes = 0;
         proposal.gate_mint = gate_mint;
         proposal.min_balance = min_balance;
-        proposal.mxe_program_id = Pubkey::default();
+        proposal.mxe_program_id = mxe_program_id;
         proposal.quorum = quorum;
         proposal.threshold_bps = threshold_bps;
         proposal.privacy_level = privacy_level;
@@ -1417,7 +1398,8 @@ pub struct CreateProposal<'info> {
     )]
     pub computation_offset_account: Account<'info, ComputationOffsetState>,
 
-    /// CHECK: ProgramConfig PDA for freeze check
+    /// CHECK: ProgramConfig PDA — validated by seeds constraint to prevent freeze bypass
+    #[account(seeds = [PROGRAM_CONFIG_SEED], bump)]
     pub program_config: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
@@ -1522,7 +1504,8 @@ pub struct CastVote<'info> {
     )]
     pub computation_offset_account: Account<'info, ComputationOffsetState>,
 
-    /// CHECK: ProgramConfig PDA for freeze check
+    /// CHECK: ProgramConfig PDA — validated by seeds constraint to prevent freeze bypass
+    #[account(seeds = [PROGRAM_CONFIG_SEED], bump)]
     pub program_config: AccountInfo<'info>,
 
     pub token_program: Program<'info, Token>,
@@ -1665,14 +1648,14 @@ pub struct DevCreateProposal<'info> {
     )]
     pub proposal: Account<'info, Proposal>,
 
-    /// CHECK: ProgramConfig PDA — optional. If it doesn't exist, freeze check is skipped.
-    /// Passed as AccountInfo for backward compatibility (won't fail if account is missing).
+    /// CHECK: ProgramConfig PDA — validated by seeds constraint to prevent freeze bypass
+    #[account(seeds = [PROGRAM_CONFIG_SEED], bump)]
     pub program_config: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
 }
 
-#[cfg(feature = "dev-mode")]
+// Available in all builds — used by init_tally_direct and dev_init_tally
 #[derive(Accounts)]
 pub struct DevInitTally<'info> {
     #[account(mut)]
@@ -1729,7 +1712,8 @@ pub struct DevCastVote<'info> {
     /// an active delegation and cannot vote directly.
     pub delegation_account: AccountInfo<'info>,
 
-    /// CHECK: ProgramConfig PDA — optional. If it doesn't exist, freeze check is skipped.
+    /// CHECK: ProgramConfig PDA — validated by seeds constraint to prevent freeze bypass
+    #[account(seeds = [PROGRAM_CONFIG_SEED], bump)]
     pub program_config: AccountInfo<'info>,
 
     pub token_program: Program<'info, Token>,
@@ -1842,7 +1826,8 @@ pub struct CastDelegatedVote<'info> {
     )]
     pub vote_record: Box<Account<'info, VoteRecord>>,
 
-    /// CHECK: ProgramConfig PDA — optional. If it doesn't exist, freeze check is skipped.
+    /// CHECK: ProgramConfig PDA — validated by seeds constraint to prevent freeze bypass
+    #[account(seeds = [PROGRAM_CONFIG_SEED], bump)]
     pub program_config: AccountInfo<'info>,
 
     pub token_program: Program<'info, Token>,
@@ -1908,7 +1893,8 @@ pub struct CommunityCreateProposal<'info> {
     )]
     pub proposer_token_account: Account<'info, TokenAccount>,
 
-    /// CHECK: ProgramConfig PDA for freeze check
+    /// CHECK: ProgramConfig PDA — validated by seeds constraint to prevent freeze bypass
+    #[account(seeds = [PROGRAM_CONFIG_SEED], bump)]
     pub program_config: AccountInfo<'info>,
 
     pub token_program: Program<'info, Token>,
@@ -2231,4 +2217,6 @@ pub enum VotingError {
     InvalidDiscussionUrlLength,
     #[msg("Cannot delegate to yourself")]
     CannotSelfDelegate,
+    #[msg("Invalid ProgramConfig account: must be the correct PDA")]
+    InvalidProgramConfig,
 }

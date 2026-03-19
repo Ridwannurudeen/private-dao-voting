@@ -164,7 +164,30 @@
           }
         },
         {
-          "name": "program_config"
+          "name": "program_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "token_program",
@@ -371,7 +394,30 @@
           }
         },
         {
-          "name": "program_config"
+          "name": "program_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "token_program",
@@ -490,7 +536,30 @@
           ]
         },
         {
-          "name": "program_config"
+          "name": "program_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "token_program",
@@ -545,6 +614,10 @@
         {
           "name": "execution_delay",
           "type": "i64"
+        },
+        {
+          "name": "mxe_program_id",
+          "type": "pubkey"
         }
       ]
     },
@@ -671,7 +744,30 @@
           }
         },
         {
-          "name": "program_config"
+          "name": "program_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "system_program",
@@ -879,7 +975,30 @@
           ]
         },
         {
-          "name": "program_config"
+          "name": "program_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "token_program",
@@ -968,9 +1087,29 @@
         },
         {
           "name": "program_config",
-          "docs": [
-            "Passed as AccountInfo for backward compatibility (won't fail if account is missing)."
-          ]
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "system_program",
@@ -1023,59 +1162,6 @@
           "type": "i64"
         }
       ]
-    },
-    {
-      "name": "dev_init_tally",
-      "docs": [
-        "Dev mode: Initialize tally without Arcium callback"
-      ],
-      "discriminator": [
-        214,
-        131,
-        44,
-        237,
-        151,
-        139,
-        17,
-        35
-      ],
-      "accounts": [
-        {
-          "name": "authority",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "proposal"
-        },
-        {
-          "name": "tally",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  116,
-                  97,
-                  108,
-                  108,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "proposal"
-              }
-            ]
-          }
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
     },
     {
       "name": "dev_reveal_results",
@@ -1555,9 +1641,65 @@
       ]
     },
     {
+      "name": "init_tally_direct",
+      "docs": [
+        "Initialize tally directly (without Arcium CPI callback).",
+        "Used by community proposals and dev mode. Available in all builds."
+      ],
+      "discriminator": [
+        129,
+        193,
+        138,
+        224,
+        7,
+        165,
+        7,
+        173
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "proposal"
+        },
+        {
+          "name": "tally",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  108,
+                  108,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "reveal_results",
       "docs": [
-        "Reveal the final vote results"
+        "Reveal the final vote results.",
+        "After the voting deadline, anyone can trigger reveal (permissionless).",
+        "Before the deadline, only the proposal authority can reveal early."
       ],
       "discriminator": [
         111,
@@ -2452,6 +2594,11 @@
       "code": 6031,
       "name": "CannotSelfDelegate",
       "msg": "Cannot delegate to yourself"
+    },
+    {
+      "code": 6032,
+      "name": "InvalidProgramConfig",
+      "msg": "Invalid ProgramConfig account: must be the correct PDA"
     }
   ],
   "types": [
