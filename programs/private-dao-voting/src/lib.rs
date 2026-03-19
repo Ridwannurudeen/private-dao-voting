@@ -1441,20 +1441,20 @@ pub struct CastVote<'info> {
     pub voter: Signer<'info>,
 
     #[account(mut)]
-    pub proposal: Account<'info, Proposal>,
+    pub proposal: Box<Account<'info, Proposal>>,
 
     #[account(
         mut,
         seeds = [TALLY_SEED, proposal.key().as_ref()],
         bump,
     )]
-    pub tally: Account<'info, Tally>,
+    pub tally: Box<Account<'info, Tally>>,
 
     #[account(
         constraint = voter_token_account.owner == voter.key(),
         constraint = voter_token_account.mint == proposal.gate_mint
     )]
-    pub voter_token_account: Account<'info, TokenAccount>,
+    pub voter_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -1463,7 +1463,7 @@ pub struct CastVote<'info> {
         seeds = [VOTE_RECORD_SEED, proposal.key().as_ref(), voter.key().as_ref()],
         bump
     )]
-    pub vote_record: Account<'info, VoteRecord>,
+    pub vote_record: Box<Account<'info, VoteRecord>>,
 
     /// CHECK: Delegation PDA for the voter — derived deterministically.
     /// If this account has data and is owned by the program, the voter has
@@ -1795,21 +1795,21 @@ pub struct CastDelegatedVote<'info> {
     pub delegation: Account<'info, Delegation>,
 
     #[account(mut)]
-    pub proposal: Account<'info, Proposal>,
+    pub proposal: Box<Account<'info, Proposal>>,
 
     #[account(
         mut,
         seeds = [TALLY_SEED, proposal.key().as_ref()],
         bump,
     )]
-    pub tally: Account<'info, Tally>,
+    pub tally: Box<Account<'info, Tally>>,
 
     /// The delegator's token account — validated against proposal gate mint
     #[account(
         constraint = delegator_token_account.owner == delegator.key() @ VotingError::InvalidTokenAccount,
         constraint = delegator_token_account.mint == proposal.gate_mint @ VotingError::InvalidTokenMint
     )]
-    pub delegator_token_account: Account<'info, TokenAccount>,
+    pub delegator_token_account: Box<Account<'info, TokenAccount>>,
 
     /// Vote record keyed to the DELEGATOR so they cannot also vote directly
     #[account(
@@ -1819,7 +1819,7 @@ pub struct CastDelegatedVote<'info> {
         seeds = [VOTE_RECORD_SEED, proposal.key().as_ref(), delegator.key().as_ref()],
         bump
     )]
-    pub vote_record: Account<'info, VoteRecord>,
+    pub vote_record: Box<Account<'info, VoteRecord>>,
 
     /// CHECK: ProgramConfig PDA — optional. If it doesn't exist, freeze check is skipped.
     pub program_config: AccountInfo<'info>,
