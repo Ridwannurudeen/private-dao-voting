@@ -93,6 +93,8 @@ test.describe("Private DAO Voting", () => {
     expect(themeAfterToggle).toBe("light");
     // Reload the page
     await page.reload({ waitUntil: "domcontentloaded" });
+    // Wait for React hydration before checking theme attribute
+    await expect(page.locator('button[aria-label*="Switch to"]')).toBeVisible({ timeout: 5000 });
     // Theme should persist from localStorage
     const themeAfterReload = await page.evaluate(() =>
       document.documentElement.getAttribute("data-theme")

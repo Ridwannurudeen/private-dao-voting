@@ -284,6 +284,8 @@ test.describe("Theme Persistence Across Navigation", () => {
     expect(themeOnProposal).toBe("light");
     // Navigate back
     await page.goto("/", { waitUntil: "domcontentloaded" });
+    // Wait for React hydration before checking theme attribute
+    await expect(page.locator('button[aria-label*="Switch to"]')).toBeVisible({ timeout: 5000 });
     const themeAfterReturn = await page.evaluate(() =>
       document.documentElement.getAttribute("data-theme")
     );
