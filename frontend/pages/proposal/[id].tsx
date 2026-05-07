@@ -30,7 +30,6 @@ import {
 } from "../../lib/arcium";
 import { Proposal } from "../../components/ProposalCard";
 import { Toast, ToastData } from "../../components/Toast";
-import { LockIcon, UnlockIcon, ShieldCheckIcon } from "../../components/Icons";
 import { ExportResults } from "../../components/ExportResults";
 import { EncryptionAnimation } from "../../components/EncryptionAnimation";
 import { VoteProgress, VoteStep } from "../../components/VoteProgress";
@@ -364,206 +363,192 @@ export default function ProposalDetail() {
   /* Render                                                           */
   /* ================================================================ */
 
+  const status = proposal
+    ? active ? { label: "Active", tone: "active" as const }
+    : proposal.isRevealed ? { label: "Revealed", tone: "revealed" as const }
+    : { label: "Ended", tone: "neutral" as const }
+    : null;
+
+  const idHex = proposal ? proposal.id.toString(16).padStart(4, "0") : "----";
+
   return (
-    <div className="min-h-screen bg-mesh">
+    <div className="min-h-screen bg-page">
       <Head>
         <title>{proposal ? `${proposal.title} | Private DAO Voting` : "Proposal | Private DAO Voting"}</title>
       </Head>
 
       {/* ---- Header ---- */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl" style={{ background: 'rgba(10, 10, 26, 0.85)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="max-w-3xl mx-auto flex justify-between items-center p-4">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="text-gray-400 hover:text-white transition-colors">
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M19 12H5M12 19l-7-7 7-7" />
-              </svg>
-            </Link>
-            <h1 className="text-xl font-display font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-              Proposal Detail
-            </h1>
-          </div>
+      <header className="sticky top-0 z-40" style={{ background: "rgba(10, 10, 13, 0.92)", backdropFilter: "blur(8px)", borderBottom: "1px solid var(--ink-3)" }}>
+        <div className="max-w-3xl mx-auto h-14 flex items-center justify-between px-5 sm:px-8">
+          <Link href="/" className="flex items-center gap-3 group">
+            <svg className="w-4 h-4 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--paper-2)" }}>
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            <span className="font-mono text-[11px] tracking-widest uppercase text-paper-2 group-hover:text-paper-0 transition-colors">
+              ← Proposals · #{idHex}
+            </span>
+          </Link>
           <WalletMultiButton />
         </div>
-        <div className="h-[1px] bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
       </header>
 
       {/* ---- Main Content ---- */}
-      <main className="max-w-3xl mx-auto p-6">
+      <main className="max-w-3xl mx-auto px-5 sm:px-8 py-10">
         {loading ? (
-          /* Skeleton loader */
-          <div className="space-y-4">
-            <div className="glass-card neon-border p-6 animate-pulse">
-              <div className="h-7 w-72 bg-white/10 rounded mb-3" />
-              <div className="h-4 w-40 bg-white/5 rounded mb-5" />
-              <div className="h-4 w-full bg-white/5 rounded mb-2" />
-              <div className="h-4 w-full bg-white/5 rounded mb-2" />
-              <div className="h-4 w-3/4 bg-white/5 rounded mb-6" />
-              <div className="flex gap-3">
-                <div className="flex-1 h-12 bg-white/5 rounded-xl" />
-                <div className="flex-1 h-12 bg-white/5 rounded-xl" />
-                <div className="flex-1 h-12 bg-white/5 rounded-xl" />
-              </div>
+          <div className="panel p-8">
+            <div className="h-3 w-20 mb-6 animate-pulse" style={{ background: "var(--ink-3)" }} />
+            <div className="h-9 w-3/4 mb-4 animate-pulse" style={{ background: "var(--ink-3)" }} />
+            <div className="h-4 w-full mb-2 animate-pulse" style={{ background: "var(--ink-3)" }} />
+            <div className="h-4 w-5/6 mb-2 animate-pulse" style={{ background: "var(--ink-3)" }} />
+            <div className="h-4 w-2/3 mb-8 animate-pulse" style={{ background: "var(--ink-3)" }} />
+            <div className="grid grid-cols-3 gap-2">
+              <div className="h-10 animate-pulse" style={{ background: "var(--ink-3)" }} />
+              <div className="h-10 animate-pulse" style={{ background: "var(--ink-3)" }} />
+              <div className="h-10 animate-pulse" style={{ background: "var(--ink-3)" }} />
             </div>
           </div>
         ) : notFound ? (
-          /* Not found */
-          <div className="text-center py-20">
-            <LockIcon className="w-12 h-12 text-gray-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-display font-bold mb-2">Proposal Not Found</h2>
-            <p className="text-gray-400 mb-6">This proposal may not exist or the ID may be incorrect.</p>
-            <Link href="/" className="px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-500 rounded-xl font-semibold inline-block">
-              Back to Proposals
+          <div className="panel py-20 px-8 text-center">
+            <div className="font-mono text-[11px] tracking-widest text-seal mb-3">404 · NOT FOUND</div>
+            <h2 className="font-display text-paper-0 text-3xl tracking-tighter mb-3">
+              No proposal at this ID.
+            </h2>
+            <p className="text-paper-2 text-[15px] leading-relaxed max-w-md mx-auto mb-8">
+              This proposal may have been cancelled, the ID may be incorrect, or it may live on a different network.
+            </p>
+            <Link href="/" className="btn-primary">
+              Back to proposals
             </Link>
           </div>
-        ) : proposal ? (
+        ) : proposal && status ? (
           <div className="space-y-4">
-            {/* ============================================ */}
-            {/* Proposal Info -- always visible              */}
-            {/* ============================================ */}
-            <article className="glass-card-elevated neon-border p-4 sm:p-6 relative" aria-label={`Proposal: ${proposal.title}`} role="region">
-              {/* Header row */}
-              <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-2">
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-xl font-display font-semibold mb-1">{proposal.title}</h2>
-                  <p className="text-sm text-gray-400">
-                    by {proposal.authority.toString().slice(0, 4)}...{proposal.authority.toString().slice(-4)}
-                  </p>
-                </div>
-                <div className="flex flex-row sm:flex-col items-start sm:items-end gap-2 flex-wrap">
-                  {/* Status badge */}
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    active
-                      ? "bg-green-500/20 text-green-400"
-                      : proposal.isRevealed
-                        ? "bg-blue-500/20 text-blue-400"
-                        : "bg-gray-500/20 text-gray-400"
-                  }`}>
-                    {active ? "Active" : proposal.isRevealed ? "Revealed" : "Ended"}
+            {/* ============= Proposal envelope ============= */}
+            <article className="panel p-6 sm:p-8" aria-label={`Proposal: ${proposal.title}`} role="region">
+              {/* Top meta row */}
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-[11px] tracking-widest text-paper-3">
+                    PROPOSAL · #{idHex}
                   </span>
-                  {/* Privacy badge */}
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${
-                    proposal.isRevealed
-                      ? "bg-cyan-500/10 text-cyan-300 border border-cyan-500/20"
-                      : "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
-                  }`}>
-                    {proposal.isRevealed ? (
-                      <><UnlockIcon className="w-3 h-3" /> Results Public</>
-                    ) : (
-                      <><LockIcon className="w-3 h-3" /> Encrypted Tally</>
-                    )}
-                  </span>
-                  {/* Time remaining */}
-                  {active && (
-                    <p className={`text-xs mt-0.5 font-mono ${isUrgent ? "text-red-400 animate-pulse" : "text-cyan-400"}`}>
-                      {formatTime(liveRemaining)} left
-                    </p>
-                  )}
+                  <span className="hr-hair" style={{ width: 18, opacity: 0.5 }} />
+                  <DetailStatusBadge status={status} />
                 </div>
+                {active && (
+                  <span className={`font-mono text-[11px] tracking-wider tabular-nums ${isUrgent ? "animate-pulse" : ""}`}
+                    style={{ color: isUrgent ? "var(--seal)" : "var(--paper-2)" }}>
+                    {formatTime(liveRemaining)} left
+                  </span>
+                )}
+              </div>
+
+              {/* Title */}
+              <h2 className="font-display text-paper-0 text-3xl sm:text-[40px] tracking-tighter leading-[1.05] mb-3">
+                {proposal.title}
+              </h2>
+              <div className="h-meta mb-7">
+                proposed by{" "}
+                <span className="text-paper-1">
+                  {proposal.authority.toString().slice(0, 4)}…{proposal.authority.toString().slice(-4)}
+                </span>
               </div>
 
               {/* Description */}
-              <div className="text-gray-300 mb-4 prose prose-sm prose-invert max-w-none">
+              <div className="text-paper-1 text-[15px] leading-relaxed prose prose-invert max-w-none mb-8">
                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
                   {proposal.description}
                 </ReactMarkdown>
               </div>
 
-              {/* Metadata row */}
-              <p className="text-xs text-gray-400 mb-4 break-all sm:break-normal">
-                Gate: {proposal.gateMint.toString().slice(0, 8)}... | Min balance: {proposal.minBalance.toString()} | Votes: {total}
-              </p>
+              {/* Metadata strip */}
+              <div className="grid grid-cols-3 gap-px mb-8" style={{ background: "var(--ink-3)" }}>
+                <DetailMeta label="Ballots" value={String(total)} bg="var(--ink-1)" />
+                <DetailMeta label="Min gate" value={proposal.minBalance.toString()} bg="var(--ink-1)" />
+                <DetailMeta label="State" value={active ? "Sealed" : proposal.isRevealed ? "Revealed" : "Closed"} bg="var(--ink-1)" />
+              </div>
 
-              {/* ======= Results (visible to everyone when revealed) ======= */}
+              {/* ======= Active + has ballots: redacted tally ======= */}
+              {active && total > 0 && (
+                <div className="envelope p-5" style={{ background: "var(--ink-2)", border: "1px solid var(--seal-line)" }}>
+                  <div className="relative z-10 flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <span className="seal-dot seal-dot-pulse" aria-hidden="true" />
+                      <span className="font-display italic text-paper-1 text-[18px]">
+                        {total} ballot{total !== 1 ? "s" : ""} sealed inside the MXE
+                      </span>
+                    </div>
+                    <span className="font-mono text-[10px] tracking-widest text-paper-3 uppercase hidden sm:inline">
+                      Cerberus
+                    </span>
+                  </div>
+                  <div className="relative z-10 grid grid-cols-3 gap-3 mt-4">
+                    <RedactedTally label="Yes" />
+                    <RedactedTally label="No" />
+                    <RedactedTally label="Abstain" />
+                  </div>
+                </div>
+              )}
+
+              {/* ======= Revealed: results ======= */}
               {proposal.isRevealed && total > 0 && (
-                <div className="mt-2 pt-4 border-t border-white/10">
-                  <div className="flex flex-wrap justify-between text-sm mb-2 gap-1">
-                    <span className="text-green-400">Yes: {yes} ({yesPct}%)</span>
-                    <span className="text-red-400">No: {no} ({noPct}%)</span>
-                    {abstain > 0 && <span className="text-slate-400">Abstain: {abstain} ({abstainPct}%)</span>}
+                <div className="pt-2">
+                  <div className="grid grid-cols-3 gap-4 mb-4">
+                    <DetailResultCell label="Yes" count={yes} pct={yesPct} tone="reveal" />
+                    <DetailResultCell label="No" count={no} pct={noPct} tone="crit" />
+                    <DetailResultCell label="Abstain" count={abstain} pct={abstainPct} tone="steel" />
                   </div>
-                  <div className="h-3 bg-white/5 rounded-full overflow-hidden flex border border-white/10">
-                    {yesPct > 0 && <div className="bg-gradient-to-r from-green-500 to-emerald-400 h-full shadow-[0_0_8px_rgba(16,185,129,0.4)]" style={{ width: yesPct + "%" }} />}
-                    {noPct > 0 && <div className="bg-gradient-to-r from-red-500 to-rose-400 h-full shadow-[0_0_8px_rgba(239,68,68,0.4)]" style={{ width: noPct + "%" }} />}
-                    {abstainPct > 0 && <div className="bg-slate-500 h-full" style={{ width: abstainPct + "%" }} />}
+                  <div className="flex h-2 overflow-hidden mb-3" style={{ background: "var(--ink-2)", border: "1px solid var(--ink-3)", borderRadius: 999 }}>
+                    {yesPct > 0 && <div style={{ width: yesPct + "%", background: "var(--reveal)" }} />}
+                    {noPct > 0 && <div style={{ width: noPct + "%", background: "var(--crit)" }} />}
+                    {abstainPct > 0 && <div style={{ width: abstainPct + "%", background: "var(--steel)" }} />}
                   </div>
-                  <p className="text-center text-xs text-gray-400 mt-2">Total: {total} votes</p>
+                  <p className="h-meta text-center">{total} ballots · threshold-decrypted via MPC</p>
                   <ExportResults proposal={proposal} />
                 </div>
               )}
 
-              {/* ======= Encrypted votes vault (visible to everyone when active + has votes) ======= */}
-              {active && total > 0 && (
-                <div className="mt-4 pt-4 border-t border-white/10">
-                  <div className={`bg-slate-800/50 rounded-xl p-4 border relative overflow-hidden ${voting ? "border-cyan-500/30" : "border-cyan-500/10"}`}>
-                    <div className={`absolute inset-0 pointer-events-none ${voting ? "shimmer-bg-active" : "shimmer-bg"}`} />
-                    <div className="relative flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <ShieldCheckIcon className={`w-5 h-5 text-cyan-400 ${voting ? "animate-pulse" : "animate-pulse-slow"}`} />
-                        <span className={`text-gray-300 ${voting ? "data-mask-animation" : ""}`}>{total} vote{total !== 1 ? "s" : ""} sealed</span>
-                      </div>
-                      <LockIcon className="w-4 h-4 text-cyan-400/50" />
-                    </div>
-                    <div className="relative flex items-center justify-center gap-3 mt-2 flex-wrap">
-                      <span className="text-[10px] text-cyan-400/60 flex items-center gap-1">
-                        <LockIcon className="w-2.5 h-2.5" /> Encrypted Shared State
-                      </span>
-                      <span className="text-[10px] text-gray-600 hidden sm:inline">|</span>
-                      <span className="text-[10px] text-purple-400/60 flex items-center gap-1">
-                        <ShieldCheckIcon className="w-2.5 h-2.5" /> Correctness Proofs
-                      </span>
-                    </div>
-                    <p className="relative text-xs text-gray-400 text-center mt-1">Secured by Arcium MXE</p>
-                  </div>
-                </div>
-              )}
-
-              {/* ======= Ended but not revealed (visible to everyone) ======= */}
+              {/* ======= Ended but not revealed ======= */}
               {!active && !proposal.isRevealed && !(isAuthority && isEnded && proposal.isActive) && (
-                <div className="mt-4 pt-4 border-t border-white/10 text-xs text-gray-400">
-                  Voting ended. Anyone can trigger the reveal.
+                <div className="h-meta">
+                  Voting has ended. Anyone can trigger the reveal.
                 </div>
               )}
             </article>
 
-            {/* ============================================ */}
-            {/* Voting Section                               */}
-            {/* ============================================ */}
-            <div className="glass-card neon-border p-4 sm:p-6">
+            {/* ============= Voting Section ============= */}
+            <div className="panel p-6 sm:p-8">
               {!connected ? (
-                /* ---- Not connected: CTA ---- */
-                <div className="text-center py-6">
-                  <LockIcon className="w-10 h-10 text-purple-400 mx-auto mb-3" />
-                  <h3 className="text-lg font-display font-semibold mb-1">Connect Wallet to Vote</h3>
-                  <p className="text-sm text-gray-400 mb-5">
+                <div className="text-center py-4">
+                  <div className="section-label mb-3">{active ? "§ cast a ballot" : "§ wallet"}</div>
+                  <h3 className="font-display text-paper-0 text-2xl tracking-tighter mb-2">
+                    {active ? "Connect a wallet to vote." : proposal.isRevealed ? "Results are public." : "Voting has ended."}
+                  </h3>
+                  <p className="text-paper-2 text-[14px] leading-relaxed max-w-md mx-auto mb-6">
                     {active
-                      ? "Connect your Solana wallet to cast an encrypted vote on this proposal."
+                      ? "Your ballot is encrypted in your browser and only the aggregate ever appears on-chain."
                       : proposal.isRevealed
-                        ? "This proposal has concluded and results are public."
-                        : "Voting has ended. Connect your wallet to view your vote record."}
+                      ? "Anyone can audit the final tally below."
+                      : "Connect your wallet to view your ballot record."}
                   </p>
-                  {active && (
-                    <WalletMultiButton />
-                  )}
+                  {active && <WalletMultiButton />}
                 </div>
               ) : (
-                /* ---- Connected: interactive voting UI ---- */
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-300 mb-3">
-                    {active ? "Cast Your Vote" : "Your Vote Status"}
-                  </h3>
+                  <div className="section-label mb-4">{active ? "§ cast a ballot" : "§ ballot status"}</div>
 
-                  {/* Token gate check */}
+                  {/* Token gate */}
                   {active && !voted && (tokenBalance < 0 || tokenBalance < Number(proposal.minBalance)) && (
-                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 space-y-3">
-                      <p className="text-sm text-yellow-400">
+                    <div className="p-4 mb-1" style={{
+                      background: "var(--steel-soft)",
+                      border: "1px solid var(--steel-line)",
+                      borderRadius: 6,
+                    }}>
+                      <p className="text-[14px] text-paper-1 leading-snug mb-3">
                         {tokenBalance < 0
                           ? "You need the gate token to vote on this proposal."
                           : `You need at least ${proposal.minBalance.toString()} gate token(s) to vote.`}
                       </p>
-                      <button onClick={() => claimTokens(proposal)} disabled={claiming}
-                        className="w-full py-3 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl font-semibold text-white disabled:opacity-50">
-                        {claiming ? "Claiming..." : "Claim Gate Tokens"}
+                      <button onClick={() => claimTokens(proposal)} disabled={claiming} className="btn-secondary w-full">
+                        {claiming ? "Claiming…" : "Claim gate tokens"}
                       </button>
                     </div>
                   )}
@@ -571,27 +556,21 @@ export default function ProposalDetail() {
                   {/* Voting buttons */}
                   {active && !voted && tokenBalance >= 0 && tokenBalance >= Number(proposal.minBalance) && (
                     <div className="space-y-3">
-                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                        <button onClick={() => setSelected("yes")} disabled={voting} aria-label="Vote Yes" aria-pressed={selected === "yes"}
-                          className={`flex-1 py-3 rounded-xl font-semibold transition-all ${selected === "yes" ? "bg-emerald-500/20 text-emerald-400 border-2 border-emerald-500 shadow-lg shadow-emerald-500/25" : "bg-white/5 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10"}`}>
-                          YES
-                        </button>
-                        <button onClick={() => setSelected("no")} disabled={voting} aria-label="Vote No" aria-pressed={selected === "no"}
-                          className={`flex-1 py-3 rounded-xl font-semibold transition-all ${selected === "no" ? "bg-red-500/20 text-red-400 border-2 border-red-500 shadow-lg shadow-red-500/25" : "bg-white/5 text-red-400 border border-red-500/30 hover:bg-red-500/10"}`}>
-                          NO
-                        </button>
-                        <button onClick={() => setSelected("abstain")} disabled={voting} aria-label="Vote Abstain" aria-pressed={selected === "abstain"}
-                          className={`flex-1 py-3 rounded-xl font-semibold transition-all ${selected === "abstain" ? "bg-slate-500/20 text-slate-300 border-2 border-slate-400 shadow-lg shadow-slate-500/25" : "bg-white/5 text-slate-400 border border-slate-500/30 hover:bg-slate-500/10"}`}>
-                          ABSTAIN
-                        </button>
+                      <div className="grid grid-cols-3 gap-2">
+                        <button onClick={() => setSelected("yes")} disabled={voting} aria-pressed={selected === "yes"}
+                          className={`btn-vote is-yes ${selected === "yes" ? "is-selected" : ""}`}>Yes</button>
+                        <button onClick={() => setSelected("no")} disabled={voting} aria-pressed={selected === "no"}
+                          className={`btn-vote is-no ${selected === "no" ? "is-selected" : ""}`}>No</button>
+                        <button onClick={() => setSelected("abstain")} disabled={voting} aria-pressed={selected === "abstain"}
+                          className={`btn-vote is-abstain ${selected === "abstain" ? "is-selected" : ""}`}>Abstain</button>
                       </div>
                       {selected && (
                         <>
                           {voting && isEncrypting && <EncryptionAnimation active={true} />}
                           <button onClick={() => vote(proposal, selected)} disabled={voting}
-                            aria-label={`Submit encrypted ${selected} vote`}
-                            className="w-full py-3 bg-gradient-to-r from-purple-600 to-cyan-500 rounded-xl font-semibold disabled:opacity-50 hover:shadow-lg hover:shadow-cyan-500/20 transition-all border border-cyan-500/20">
-                            {voting ? (isEncrypting ? "Encrypting vote..." : "Submitting to Solana...") : "Submit Encrypted Vote"}
+                            className="btn-primary w-full"
+                            aria-label={`Submit encrypted ${selected} vote`}>
+                            {voting ? (isEncrypting ? "Encrypting…" : "Submitting to Solana…") : "Seal & submit ballot"}
                           </button>
                           {voting && (
                             <VoteProgress step={currentVoteStep} onComplete={() => setCurrentVoteStep("idle")} />
@@ -603,68 +582,134 @@ export default function ProposalDetail() {
 
                   {/* Already voted */}
                   {active && voted && (
-                    <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-4 flex items-center justify-center gap-2">
-                      <ShieldCheckIcon className="w-5 h-5 text-cyan-400" />
-                      <span className="text-cyan-400 text-sm sm:text-base">Your encrypted vote is sealed on-chain</span>
+                    <div className="p-4 flex items-center gap-3" style={{
+                      background: "var(--seal-soft)",
+                      border: "1px solid var(--seal-line)",
+                      borderRadius: 6,
+                    }}>
+                      <span className="seal-dot seal-dot-pulse" aria-hidden="true" />
+                      <span className="font-display italic text-paper-1 text-[15px]">
+                        Your ballot is sealed on-chain.
+                      </span>
                     </div>
                   )}
 
-                  {/* Reveal button (authority only) */}
+                  {/* Reveal button */}
                   {canReveal && (
-                    <button onClick={() => reveal(proposal)} disabled={revealing}
-                      className="w-full py-3 mt-3 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl font-semibold disabled:opacity-50 hover:shadow-lg hover:shadow-cyan-500/20 transition-all">
-                      {revealing ? "Revealing..." : "Reveal Results"}
+                    <button onClick={() => reveal(proposal)} disabled={revealing} className="btn-primary w-full mt-3">
+                      {revealing ? "Revealing…" : "Reveal results"}
                     </button>
                   )}
                 </div>
               )}
             </div>
 
-            {/* ============================================ */}
-            {/* On-chain details -- always visible           */}
-            {/* ============================================ */}
-            <div className="glass-card p-4 border border-white/5">
-              <h3 className="text-sm font-semibold text-gray-300 mb-3">On-Chain Details</h3>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Proposal PDA</span>
-                  <a href={`https://explorer.solana.com/address/${proposal.publicKey.toString()}?cluster=devnet`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="text-cyan-400 hover:underline font-mono">
-                    {proposal.publicKey.toString().slice(0, 16)}...
-                  </a>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Authority</span>
-                  <a href={`https://explorer.solana.com/address/${proposal.authority.toString()}?cluster=devnet`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="text-cyan-400 hover:underline font-mono">
-                    {proposal.authority.toString().slice(0, 16)}...
-                  </a>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Gate Mint</span>
-                  <span className="text-gray-300 font-mono">{proposal.gateMint.toString().slice(0, 16)}...</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Voting Ends</span>
-                  <span className="text-gray-300">{new Date(Number(proposal.votingEndsAt) * 1000).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Program</span>
-                  <a href={`https://explorer.solana.com/address/${PROGRAM_ID.toString()}?cluster=devnet`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="text-cyan-400 hover:underline font-mono">
-                    {PROGRAM_ID.toString().slice(0, 16)}...
-                  </a>
-                </div>
-              </div>
+            {/* ============= On-chain details ============= */}
+            <div className="panel p-6">
+              <div className="section-label mb-4">§ on-chain</div>
+              <dl className="space-y-2.5">
+                <DetailLink label="Proposal PDA"
+                  short={`${proposal.publicKey.toString().slice(0, 12)}…${proposal.publicKey.toString().slice(-6)}`}
+                  href={`https://explorer.solana.com/address/${proposal.publicKey.toString()}?cluster=devnet`} />
+                <DetailLink label="Authority"
+                  short={`${proposal.authority.toString().slice(0, 12)}…${proposal.authority.toString().slice(-6)}`}
+                  href={`https://explorer.solana.com/address/${proposal.authority.toString()}?cluster=devnet`} />
+                <DetailRow label="Gate mint"
+                  value={`${proposal.gateMint.toString().slice(0, 12)}…${proposal.gateMint.toString().slice(-6)}`} />
+                <DetailRow label="Voting ends"
+                  value={new Date(Number(proposal.votingEndsAt) * 1000).toUTCString()} />
+                <DetailLink label="Program"
+                  short={`${PROGRAM_ID.toString().slice(0, 12)}…${PROGRAM_ID.toString().slice(-6)}`}
+                  href={`https://explorer.solana.com/address/${PROGRAM_ID.toString()}?cluster=devnet`} />
+              </dl>
             </div>
           </div>
         ) : null}
       </main>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
+/* =========================================================================
+   Sub-components — local to detail page
+   ========================================================================= */
+
+function DetailStatusBadge({ status }: { status: { label: string; tone: "active" | "revealed" | "neutral" } }) {
+  const styles = {
+    active: { color: "var(--seal)", border: "1px solid var(--seal-line)", background: "var(--seal-soft)" },
+    revealed: { color: "var(--reveal)", border: "1px solid var(--reveal-line)", background: "var(--reveal-soft)" },
+    neutral: { color: "var(--paper-2)", border: "1px solid var(--ink-3)", background: "transparent" },
+  } as const;
+  const s = styles[status.tone];
+  return (
+    <span
+      className="font-mono text-[10px] uppercase tracking-widest px-1.5 py-0.5 inline-flex items-center gap-1"
+      style={{ ...s, borderRadius: 4 }}
+    >
+      {status.tone === "active" && <span style={{ width: 5, height: 5, borderRadius: 999, background: "currentColor" }} />}
+      {status.label}
+    </span>
+  );
+}
+
+function DetailMeta({ label, value, bg }: { label: string; value: string; bg: string }) {
+  return (
+    <div className="px-4 py-3" style={{ background: bg }}>
+      <div className="h-eyebrow mb-1">{label}</div>
+      <div className="font-mono text-[13px] text-paper-1 tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+function DetailResultCell({ label, count, pct, tone }: { label: string; count: number; pct: number; tone: "reveal" | "crit" | "steel" }) {
+  const color = tone === "reveal" ? "var(--reveal)" : tone === "crit" ? "var(--crit)" : "var(--steel)";
+  return (
+    <div className="text-center">
+      <div className="h-eyebrow mb-1">{label}</div>
+      <div className="font-display text-paper-0 text-[28px] tracking-tighter leading-none mb-1" style={{ color }}>
+        {count}
+      </div>
+      <div className="font-mono text-[11px] tabular-nums text-paper-3">{pct}%</div>
+    </div>
+  );
+}
+
+function RedactedTally({ label }: { label: string }) {
+  return (
+    <div className="text-center">
+      <div className="h-eyebrow mb-1">{label}</div>
+      <div className="redact-bar font-display text-[28px] tracking-widest leading-none" aria-hidden="true">
+        ▓▓▓
+      </div>
+    </div>
+  );
+}
+
+function DetailLink({ label, short, href }: { label: string; short: string; href: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <dt className="h-eyebrow">{label}</dt>
+      <dd>
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-mono text-[12px] text-paper-1 hover:text-seal transition-colors"
+        >
+          {short}
+        </a>
+      </dd>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <dt className="h-eyebrow">{label}</dt>
+      <dd className="font-mono text-[12px] text-paper-1 truncate">{value}</dd>
     </div>
   );
 }

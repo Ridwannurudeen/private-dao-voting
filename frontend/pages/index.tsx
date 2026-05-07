@@ -45,7 +45,7 @@ import {
 import { getVoteQueue, QueuedVote } from "../lib/vote-queue";
 import { parseAnchorError, explorerTxUrl } from "../lib/errors";
 import { withRetry } from "../lib/retry";
-import { LockIcon, ShieldCheckIcon } from "../components/Icons";
+import { ShieldCheckIcon } from "../components/Icons";
 import { Toast, ToastData } from "../components/Toast";
 import { CreateModal } from "../components/CreateModal";
 import { ProposalCard, Proposal } from "../components/ProposalCard";
@@ -61,6 +61,7 @@ import { Sidebar } from "../components/Sidebar";
 import { NetworkVisualization } from "../components/NetworkVisualization";
 import { OnboardingDrawer } from "../components/OnboardingDrawer";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+import Landing from "../components/Landing";
 
 import generatedIdl from "../idl/private_dao_voting.json";
 
@@ -885,97 +886,10 @@ export default function Home() {
   useKeyboardShortcuts(shortcutHandlers);
 
   return (
-    <div className="min-h-screen bg-mesh overflow-x-hidden">
+    <div className="min-h-screen bg-page overflow-x-hidden">
       {!connected ? (
-        /* ==================== HERO LANDING (unchanged) ==================== */
-        <>
-          <header className="sticky top-0 z-40 backdrop-blur-xl" role="banner" style={{ background: 'rgba(10, 10, 26, 0.85)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            <div className="max-w-6xl mx-auto flex justify-between items-center px-4 sm:px-6 py-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 glow-purple" style={{ background: 'linear-gradient(135deg, rgba(147,51,234,0.3), rgba(34,211,238,0.2))' }} aria-hidden="true">
-                  <ShieldCheckIcon className="w-5 h-5 text-cyan-400" />
-                </div>
-                <div className="min-w-0">
-                  <h1 className="text-lg font-bold text-gradient truncate">Private DAO Voting</h1>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] text-gray-500 tracking-[0.2em] uppercase">Powered by Arcium</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <ThemeToggle />
-                <WalletMultiButton />
-              </div>
-            </div>
-          </header>
-
-          <main id="main-content" className="max-w-6xl mx-auto px-4 sm:px-6 py-8" role="main">
-            <div className="relative overflow-hidden">
-              <div className="orb orb-purple w-[200px] h-[200px] sm:w-[400px] sm:h-[400px] -top-16 -left-16 sm:-top-32 sm:-left-32" aria-hidden="true" />
-              <div className="orb orb-cyan w-[150px] h-[150px] sm:w-[300px] sm:h-[300px] top-20 -right-10 sm:right-0" aria-hidden="true" />
-              <div className="orb orb-blue w-[120px] h-[120px] sm:w-[250px] sm:h-[250px] bottom-0 left-1/4 sm:left-1/3" aria-hidden="true" />
-
-              <div className="relative grid-pattern py-16 sm:py-24">
-                <div className="text-center mb-16">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-cyan-500/20 bg-cyan-500/5 mb-8">
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" aria-hidden="true" />
-                    <span className="text-xs text-cyan-400">Built on Arcium MXE &mdash; Confidential Computing for Solana</span>
-                  </div>
-
-                  <h2 className="text-4xl sm:text-6xl lg:text-7xl font-display font-bold mb-6 leading-tight">
-                    <span className="text-white">Vote </span>
-                    <span className="text-gradient-animated">Privately</span>
-                    <br />
-                    <span className="text-white">on Solana</span>
-                  </h2>
-
-                  <p className="text-gray-400 text-lg sm:text-xl mb-4 max-w-2xl mx-auto leading-relaxed">
-                    Token-gated governance where individual votes are
-                    <span className="text-cyan-400"> never revealed</span>.
-                    Encrypted, tallied via MPC, verified on-chain.
-                  </p>
-
-                  <p className="text-gray-500 text-sm mb-10 max-w-lg mx-auto">
-                    Governance without social pressure.
-                  </p>
-
-                  <WalletMultiButton />
-                </div>
-
-                <div className="grid sm:grid-cols-3 gap-4 max-w-4xl mx-auto">
-                  <div className="glass-card-elevated p-6 text-center group hover:border-cyan-500/20 transition-all duration-500">
-                    <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto mb-4 group-hover:glow-cyan transition-all" aria-hidden="true">
-                      <LockIcon className="w-6 h-6 text-cyan-400" />
-                    </div>
-                    <h3 className="font-display font-semibold text-white mb-2">Encrypted Votes</h3>
-                    <p className="text-sm text-gray-400 leading-relaxed">Your vote is encrypted before it leaves your browser. No one &mdash; not even validators &mdash; can see how you voted.</p>
-                  </div>
-
-                  <div className="glass-card-elevated p-6 text-center group hover:border-purple-500/20 transition-all duration-500">
-                    <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-4 group-hover:glow-purple transition-all">
-                      <svg className="w-6 h-6 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
-                        <circle cx="8" cy="14" r="1" fill="currentColor" /><circle cx="13" cy="14" r="1" fill="currentColor" />
-                        <path d="M8 14h5" />
-                      </svg>
-                    </div>
-                    <h3 className="font-display font-semibold text-white mb-2">MPC Tallying</h3>
-                    <p className="text-sm text-gray-400 leading-relaxed">Votes are tallied by a network of independent nodes, without ever being decrypted.</p>
-                  </div>
-
-                  <div className="glass-card-elevated p-6 text-center group hover:border-emerald-500/20 transition-all duration-500">
-                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-4">
-                      <ShieldCheckIcon className="w-6 h-6 text-emerald-400" />
-                    </div>
-                    <h3 className="font-display font-semibold text-white mb-2">Verified Results</h3>
-                    <p className="text-sm text-gray-400 leading-relaxed">Cryptographic proofs ensure the final count is honest and tamper-proof.</p>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          </main>
-        </>
+        /* ==================== EDITORIAL LANDING ==================== */
+        <Landing />
       ) : (
         /* ==================== DASHBOARD LAYOUT ==================== */
         <DashboardLayout
@@ -1016,28 +930,41 @@ export default function Home() {
           {/* ===== MAIN CONTENT AREA ===== */}
 
           {/* Dashboard Top Bar */}
-          <div className="dashboard-topbar flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div className="dashboard-topbar flex justify-between items-center gap-3">
             <div className="flex items-center gap-4 min-w-0 pl-12 lg:pl-0">
-              <h2 className="text-xl sm:text-2xl font-display font-bold text-gradient truncate">Private DAO Governance</h2>
+              <h2 className="font-display text-paper-0 text-[18px] sm:text-[20px] tracking-tighter truncate">Governance</h2>
               <div className="hidden sm:flex items-center gap-2">
-                <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
-                  arciumClient
-                    ? arciumClient.isFallback()
-                      ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
-                      : "bg-green-500/10 text-green-400 border-green-500/20"
-                    : DEVELOPMENT_MODE
-                    ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
-                    : "bg-red-500/10 text-red-400 border-red-500/20"
-                }`}>
+                <span
+                  className="font-mono text-[10px] px-2 py-1 tracking-wider uppercase flex items-center gap-1.5"
+                  style={{
+                    color: arciumClient
+                      ? arciumClient.isFallback() ? "var(--steel)" : "var(--reveal)"
+                      : DEVELOPMENT_MODE ? "var(--steel)" : "var(--crit)",
+                    border: `1px solid ${
+                      arciumClient
+                        ? arciumClient.isFallback() ? "var(--steel-line)" : "var(--reveal-line)"
+                        : DEVELOPMENT_MODE ? "var(--steel-line)" : "var(--crit-soft)"
+                    }`,
+                    background: arciumClient
+                      ? arciumClient.isFallback() ? "var(--steel-soft)" : "var(--reveal-soft)"
+                      : DEVELOPMENT_MODE ? "var(--steel-soft)" : "var(--crit-soft)",
+                    borderRadius: 4,
+                  }}
+                >
+                  <span style={{ width: 5, height: 5, borderRadius: 999, background: "currentColor" }} />
                   {arciumClient
-                    ? arciumClient.isFallback()
-                      ? "Awaiting MXE"
-                      : "MXE Active"
+                    ? arciumClient.isFallback() ? "Awaiting MXE" : "MXE Active"
                     : DEVELOPMENT_MODE ? "Dev Mode" : "MXE Offline"}
                 </span>
                 {queuedCount > 0 && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full border bg-orange-500/10 text-orange-400 border-orange-500/20 flex items-center gap-1"
-                    title={`${queuedCount} vote(s) queued for retry when MXE reconnects`}>
+                  <span
+                    className="font-mono text-[10px] px-2 py-1 tracking-wider uppercase flex items-center gap-1.5"
+                    style={{
+                      color: "var(--seal)", border: "1px solid var(--seal-line)",
+                      background: "var(--seal-soft)", borderRadius: 4,
+                    }}
+                    title={`${queuedCount} vote(s) queued for retry when MXE reconnects`}
+                  >
                     <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                     </svg>
@@ -1130,20 +1057,18 @@ export default function Home() {
 
             {/* Action bar */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-              <div>
-                <p className="text-sm text-gray-500">
-                  {proposals.length} proposal{proposals.length !== 1 ? "s" : ""}
-                  {hiddenProposals.size > 0 && (
-                    <button onClick={() => { setHiddenProposals(new Set()); localStorage.removeItem("hiddenProposals"); }}
-                      className="text-gray-600 hover:text-cyan-400 transition-colors ml-2">
-                      ({hiddenProposals.size} hidden &mdash; show)
-                    </button>
-                  )}
-                </p>
+              <div className="h-meta">
+                {proposals.length} proposal{proposals.length !== 1 ? "s" : ""}
+                {hiddenProposals.size > 0 && (
+                  <button onClick={() => { setHiddenProposals(new Set()); localStorage.removeItem("hiddenProposals"); }}
+                    className="ml-2 text-paper-2 hover:text-seal transition-colors">
+                    ({hiddenProposals.size} hidden — show)
+                  </button>
+                )}
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
-                <button onClick={load} className="btn-secondary flex-1 sm:flex-none px-4 py-2 text-sm !rounded-xl">Refresh</button>
-                <button onClick={() => setModal(true)} className="btn-primary flex-1 sm:flex-none px-4 py-2 text-sm !rounded-xl xl:hidden">+ New Proposal</button>
+                <button onClick={load} className="btn-secondary flex-1 sm:flex-none">Refresh</button>
+                <button onClick={() => setModal(true)} className="btn-primary flex-1 sm:flex-none xl:hidden">+ New proposal</button>
               </div>
             </div>
 
@@ -1161,26 +1086,30 @@ export default function Home() {
             )}
 
             {!loading && proposals.length === 0 && (
-              <div className="text-center py-16 glass-card-elevated p-8">
-                <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-6">
-                  <LockIcon className="w-8 h-8 text-purple-400" />
-                </div>
-                <h3 className="text-xl font-display font-semibold mb-2 text-white">Welcome to Private DAO Voting</h3>
-                <p className="text-gray-400 mb-6 max-w-md mx-auto">No proposals yet. Create the first one to start encrypted governance — votes are sealed with Arcium MPC and only aggregate results are revealed.</p>
-                <button onClick={() => setModal(true)} className="btn-primary px-8 py-3 text-base">+ Create First Proposal</button>
+              <div className="panel py-16 px-8 text-center">
+                <div className="section-label mb-3">§ no proposals</div>
+                <h3 className="font-display text-paper-0 text-3xl tracking-tighter leading-tight mb-3">
+                  The chamber is empty.
+                </h3>
+                <p className="text-paper-2 text-[15px] leading-relaxed max-w-md mx-auto mb-7">
+                  No proposals yet. Open the first one to start encrypted governance — ballots are sealed inside Arcium MPC, only aggregate results are revealed.
+                </p>
+                <button onClick={() => setModal(true)} className="btn-primary">
+                  Open the first proposal
+                </button>
 
-                <div className="mt-8 pt-6 border-t border-white/5 grid sm:grid-cols-3 gap-4 text-left max-w-lg mx-auto">
-                  <div className="flex items-start gap-2">
-                    <span className="text-cyan-400 text-sm font-bold mt-0.5">1.</span>
-                    <p className="text-xs text-gray-500">Create a proposal with a title, description, and voting duration</p>
+                <div className="mt-10 pt-8 grid sm:grid-cols-3 gap-px text-left max-w-2xl mx-auto" style={{ background: "var(--ink-3)" }}>
+                  <div className="p-5" style={{ background: "var(--ink-1)" }}>
+                    <span className="font-mono text-[10px] text-seal tracking-widest">01</span>
+                    <p className="text-[13px] text-paper-2 leading-relaxed mt-2">Open a proposal — title, body, voting window, gate token.</p>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-cyan-400 text-sm font-bold mt-0.5">2.</span>
-                    <p className="text-xs text-gray-500">Community members cast encrypted votes (YES / NO / ABSTAIN)</p>
+                  <div className="p-5" style={{ background: "var(--ink-1)" }}>
+                    <span className="font-mono text-[10px] text-seal tracking-widest">02</span>
+                    <p className="text-[13px] text-paper-2 leading-relaxed mt-2">Token holders cast encrypted ballots — yes, no, abstain.</p>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-cyan-400 text-sm font-bold mt-0.5">3.</span>
-                    <p className="text-xs text-gray-500">After voting ends, reveal the aggregate results with correctness proofs</p>
+                  <div className="p-5" style={{ background: "var(--ink-1)" }}>
+                    <span className="font-mono text-[10px] text-seal tracking-widest">03</span>
+                    <p className="text-[13px] text-paper-2 leading-relaxed mt-2">After the deadline, the aggregate is threshold-decrypted on-chain.</p>
                   </div>
                 </div>
               </div>
@@ -1231,23 +1160,24 @@ export default function Home() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-2 pt-4">
+              <div className="flex justify-center items-center gap-1 pt-4">
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="px-3 py-1.5 text-sm rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-cyan-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="btn-ghost disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  Prev
+                  ← Prev
                 </button>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                   <button
                     key={page}
                     onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 text-sm rounded-lg transition-all ${
+                    className="font-mono text-[11px] tabular-nums w-8 h-8 transition-colors"
+                    style={
                       page === currentPage
-                        ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
-                        : "bg-white/5 border border-white/10 text-gray-500 hover:text-white"
-                    }`}
+                        ? { color: "var(--seal)", border: "1px solid var(--seal-line)", background: "var(--seal-soft)", borderRadius: 4 }
+                        : { color: "var(--paper-3)", border: "1px solid transparent", background: "transparent", borderRadius: 4 }
+                    }
                   >
                     {page}
                   </button>
@@ -1255,9 +1185,9 @@ export default function Home() {
                 <button
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="px-3 py-1.5 text-sm rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-cyan-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="btn-ghost disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  Next
+                  Next →
                 </button>
               </div>
             )}

@@ -1,5 +1,4 @@
 import { Proposal } from "./ProposalCard";
-import { ShieldCheckIcon } from "./Icons";
 import { formatCompactNumber } from "../lib/format";
 
 interface StatsBarProps {
@@ -16,57 +15,27 @@ export function StatsBar({ proposals, nowTs }: StatsBarProps) {
   const revealedCount = proposals.filter((p) => p.isRevealed).length;
 
   const stats = [
-    {
-      label: "Proposals",
-      value: formatCompactNumber(totalProposals),
-      sub: `${revealedCount} revealed`,
-      icon: (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
-        </svg>
-      ),
-      color: "text-purple-400",
-      bg: "bg-purple-500/10",
-      border: "border-purple-500/20",
-    },
-    {
-      label: "Active Proposals",
-      value: String(activeProposals),
-      sub: `${activeProposals} voting now`,
-      icon: <span className="w-3 h-3 rounded-full bg-green-400 animate-pulse" />,
-      color: "text-green-400",
-      bg: "bg-green-500/10",
-      border: "border-green-500/20",
-    },
-    {
-      label: "Total Votes",
-      value: formatCompactNumber(totalVotes),
-      sub: `across ${activeProposals} active`,
-      icon: <ShieldCheckIcon className="w-5 h-5" />,
-      color: "text-cyan-400",
-      bg: "bg-cyan-500/10",
-      border: "border-cyan-500/20",
-    },
+    { label: "Proposals", value: formatCompactNumber(totalProposals), sub: `${revealedCount} revealed` },
+    { label: "Active", value: String(activeProposals), sub: activeProposals === 0 ? "none open" : "voting now", live: activeProposals > 0 },
+    { label: "Ballots cast", value: formatCompactNumber(totalVotes), sub: `across ${activeProposals} open` },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      {stats.map((s) => (
-        <div
-          key={s.label}
-          className={`glass-card-elevated p-5 border ${s.border} hover:border-opacity-40 transition-all`}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className={`w-10 h-10 rounded-xl ${s.bg} border ${s.border} flex items-center justify-center shrink-0 ${s.color}`}>
-              {s.icon}
+    <div className="panel">
+      <div className="grid grid-cols-3 divide-x" style={{ borderColor: "var(--ink-3)" }}>
+        {stats.map((s) => (
+          <div key={s.label} className="px-5 py-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="h-eyebrow">{s.label}</span>
+              {s.live && <span className="seal-dot seal-dot-pulse" aria-hidden="true" style={{ width: 6, height: 6 }} />}
             </div>
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">{s.label}</p>
+            <div className="font-display text-paper-0 text-[28px] sm:text-[32px] tracking-tighter leading-none mb-1.5">
+              {s.value}
+            </div>
+            <div className="h-meta">{s.sub}</div>
           </div>
-          <p className={`text-3xl font-bold font-display ${s.color} mb-0.5`}>{s.value}</p>
-          <p className="text-[11px] text-gray-500">{s.sub}</p>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

@@ -1,4 +1,3 @@
-import { ShieldCheckIcon } from "./Icons";
 import { DEVELOPMENT_MODE } from "../lib/arcium";
 
 interface SidebarProps {
@@ -14,7 +13,7 @@ const NAV_ITEMS = [
     id: "dashboard",
     label: "Dashboard",
     icon: (
-      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
         <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
       </svg>
@@ -24,7 +23,7 @@ const NAV_ITEMS = [
     id: "proposals",
     label: "Proposals",
     icon: (
-      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
         <polyline points="14 2 14 8 20 8" />
       </svg>
@@ -34,31 +33,48 @@ const NAV_ITEMS = [
 
 export function Sidebar({
   arciumClient,
-  connected,
+  connected: _connected,
   activeSection = "dashboard",
   onNavigate,
   onOpenDrawer,
 }: SidebarProps) {
+  const status = arciumClient
+    ? arciumClient.isFallback()
+      ? { label: "Awaiting MXE", tone: "warn" as const }
+      : { label: "MXE Active", tone: "ok" as const }
+    : DEVELOPMENT_MODE
+    ? { label: "Dev Mode", tone: "warn" as const }
+    : { label: "MXE Offline", tone: "crit" as const };
+
   return (
     <div className="flex flex-col h-full">
-      {/* Logo */}
+      {/* Mark */}
       <div className="p-5 pb-4">
         <div className="flex items-center gap-3">
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 glow-purple"
-            style={{ background: "linear-gradient(135deg, rgba(147,51,234,0.3), rgba(34,211,238,0.2))" }}
+            aria-hidden="true"
+            className="shrink-0 flex items-center justify-center"
+            style={{
+              width: 28, height: 28, borderRadius: 6,
+              background: "var(--ink-2)", border: "1px solid var(--ink-4)",
+            }}
           >
-            <ShieldCheckIcon className="w-5 h-5 text-cyan-400" />
+            <span style={{ width: 10, height: 10, borderRadius: 999, background: "var(--seal)", boxShadow: "0 0 0 2px var(--seal-soft)" }} />
           </div>
-          <div className="min-w-0">
-            <h1 className="text-sm font-bold text-white truncate">Private DAO</h1>
-            <p className="text-[9px] text-gray-500 tracking-[0.15em] uppercase">Powered by Arcium</p>
+          <div className="min-w-0 leading-tight">
+            <div className="font-display text-paper-0 text-[15px] tracking-tighter">Private DAO</div>
+            <div className="h-meta">arcium · sol</div>
           </div>
         </div>
       </div>
 
+      {/* Section divider */}
+      <div className="px-3 mt-2">
+        <div className="h-eyebrow px-2 mb-2">Navigate</div>
+      </div>
+
       {/* Navigation */}
-      <nav className="px-3 space-y-1">
+      <nav className="px-3 space-y-0.5">
         {NAV_ITEMS.map((item) => (
           <button
             key={item.id}
@@ -75,13 +91,14 @@ export function Sidebar({
           </button>
         ))}
 
-        {/* Learn button */}
         {onOpenDrawer && (
           <button onClick={onOpenDrawer} className="sidebar-nav-item w-full">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
-            <span>How It Works</span>
+            <span>How it works</span>
           </button>
         )}
       </nav>
@@ -89,48 +106,55 @@ export function Sidebar({
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* MXE Heartbeat Monitor */}
+      {/* MXE Status */}
       <div className="px-4 pb-4 space-y-3">
-        <div className="glass-card p-3 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">MXE Status</span>
-            <div className="flex items-center gap-1.5">
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  arciumClient
-                    ? arciumClient.isFallback()
-                      ? "bg-yellow-400 animate-pulse"
-                      : "bg-green-400 animate-heartbeat"
-                    : DEVELOPMENT_MODE
-                    ? "bg-yellow-400 animate-pulse"
-                    : "bg-red-400"
-                }`}
-              />
-              <span className={`text-[10px] font-medium ${
-                arciumClient
-                  ? arciumClient.isFallback()
-                    ? "text-yellow-400"
-                    : "text-green-400"
-                  : DEVELOPMENT_MODE ? "text-yellow-400" : "text-red-400"
-              }`}>
-                {arciumClient
-                  ? arciumClient.isFallback()
-                    ? "Awaiting MXE"
-                    : "Active"
-                  : DEVELOPMENT_MODE ? "Dev Mode" : "Offline"}
-              </span>
-            </div>
+        <div className="panel-hairline px-3 py-3">
+          <div className="h-eyebrow mb-2">Cluster</div>
+          <div className="flex items-center gap-2">
+            <span
+              className={status.tone === "ok" ? "seal-dot seal-dot-pulse" : ""}
+              aria-hidden="true"
+              style={
+                status.tone === "ok"
+                  ? { background: "var(--reveal)", boxShadow: "0 0 0 3px var(--reveal-soft)" }
+                  : status.tone === "warn"
+                  ? { width: 8, height: 8, borderRadius: 999, background: "var(--steel)", boxShadow: "0 0 0 3px var(--steel-soft)", display: "inline-block" }
+                  : { width: 8, height: 8, borderRadius: 999, background: "var(--crit)", boxShadow: "0 0 0 3px var(--crit-soft)", display: "inline-block" }
+              }
+            />
+            <span className="font-mono text-[11px] text-paper-1 tracking-wide">
+              {status.label}
+            </span>
           </div>
         </div>
 
         {/* Keyboard shortcuts */}
-        <div className="hidden lg:flex items-center gap-2 text-[9px] text-gray-600 px-1 flex-wrap">
-          <span><kbd className="px-1 py-0.5 bg-white/5 border border-white/10 rounded text-gray-500">N</kbd> New</span>
-          <span><kbd className="px-1 py-0.5 bg-white/5 border border-white/10 rounded text-gray-500">R</kbd> Refresh</span>
-          <span><kbd className="px-1 py-0.5 bg-white/5 border border-white/10 rounded text-gray-500">D</kbd> Debug</span>
-          <span><kbd className="px-1 py-0.5 bg-white/5 border border-white/10 rounded text-gray-500">Esc</kbd> Close</span>
+        <div className="hidden lg:flex items-center gap-2 text-[10px] px-1 flex-wrap" style={{ color: "var(--paper-3)" }}>
+          <span><Kbd>N</Kbd> New</span>
+          <span><Kbd>R</Kbd> Refresh</span>
+          <span><Kbd>D</Kbd> Debug</span>
+          <span><Kbd>Esc</Kbd> Close</span>
         </div>
       </div>
     </div>
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd
+      className="font-mono"
+      style={{
+        padding: "1px 5px",
+        background: "var(--ink-2)",
+        border: "1px solid var(--ink-4)",
+        borderRadius: 4,
+        color: "var(--paper-2)",
+        fontSize: 9,
+        letterSpacing: "0.04em",
+      }}
+    >
+      {children}
+    </kbd>
   );
 }
