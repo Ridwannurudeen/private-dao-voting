@@ -6,10 +6,10 @@ export default function Document() {
       <Head>
         <meta name="description" content="Token-gated private voting on Solana powered by Arcium MXE. Votes are encrypted end-to-end via multi-party computation — individual choices are never revealed." />
 
-        {/* Google Fonts: Inter (body) + Space Grotesk (headings/display) */}
+        {/* Editorial-cryptographic type stack: Fraunces (display serif) + Inter Tight (body) + JetBrains Mono (cipher) */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
         {/* Favicon — ICO fallback for all browsers, SVG for modern, PNG sizes for devices */}
         <link rel="icon" href="/favicon.ico" sizes="32x32" />
@@ -20,7 +20,7 @@ export default function Document() {
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#0a0a1a" />
+        <meta name="theme-color" content="#0A0A0D" />
       </Head>
       <body className="font-sans antialiased">
         {/* Blocking script: apply persisted theme before React hydrates to prevent FOUC */}
